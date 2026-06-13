@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>YAMANOTE LIVE — 山手線トラッカー</title>
+<style>
+  :root{
+    --sand:#ECE3CF; --sand-deep:#E3D8BE;
+    --avocado:#8FA659; --avocado-dk:#6E8443;
+    --orange:#C8552E; --teal:#2E7B86; --mustard:#E0A52E;
+    --ink:#3A352C; --paper:#F8F3E6;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;height:100%;}
+  body{
+    background:radial-gradient(120% 120% at 50% 0%, #F2EAD8 0%, var(--sand) 55%, var(--sand-deep) 100%);
+    color:var(--ink);
+    font-family:"Futura","Century Gothic","Avenir Next","Helvetica Neue","Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;
+    -webkit-font-smoothing:antialiased; overflow:hidden;
+  }
+  #app{position:fixed;inset:0;display:flex;flex-direction:column;}
+
+  header{display:flex;align-items:center;gap:22px;padding:13px 26px 8px;flex-wrap:wrap;}
+  .brand{display:flex;flex-direction:column;line-height:1;}
+  .brand .dot-row{display:flex;align-items:center;gap:9px;}
+  .brand .knob{width:13px;height:13px;border-radius:50%;background:var(--avocado);border:2.5px solid var(--ink);}
+  .brand h1{font-size:25px;letter-spacing:.22em;margin:0;font-weight:700;text-transform:uppercase;}
+  .brand small{margin-top:6px;letter-spacing:.42em;font-size:11px;color:var(--avocado-dk);text-transform:uppercase;font-weight:700;}
+
+  .clock{margin-left:6px;display:flex;flex-direction:column;align-items:flex-start;}
+  .clock .time{font-size:30px;font-weight:700;letter-spacing:.06em;font-variant-numeric:tabular-nums;}
+  .clock .label{font-size:10px;letter-spacing:.32em;color:var(--avocado-dk);text-transform:uppercase;margin-top:2px;font-weight:700;}
+  .spacer{flex:1;}
+
+  .panel{display:flex;gap:10px;align-items:center;}
+  .stat{background:var(--paper);border:2px solid var(--ink);border-radius:13px;padding:8px 14px;
+    display:flex;flex-direction:column;align-items:center;min-width:60px;box-shadow:3px 3px 0 rgba(58,53,44,.13);}
+  .stat b{font-size:22px;font-variant-numeric:tabular-nums;line-height:1;}
+  .stat span{font-size:9px;letter-spacing:.16em;margin-top:5px;color:var(--avocado-dk);text-transform:uppercase;font-weight:700;}
+
+  .speeds{display:flex;border:2px solid var(--ink);border-radius:13px;overflow:hidden;box-shadow:3px 3px 0 rgba(58,53,44,.13);}
+  .speeds button{border:none;background:var(--paper);color:var(--ink);font-family:inherit;font-weight:700;font-size:13px;
+    padding:11px 13px;cursor:pointer;border-right:2px solid var(--ink);}
+  .speeds button:last-child{border-right:none;}
+  .speeds button.active{background:var(--ink);color:var(--paper);}
+  .speeds.hidden{display:none;}
+
+  /* live bar */
+  .livebar{display:flex;align-items:center;gap:10px;padding:2px 26px 12px;flex-wrap:wrap;}
+  .pill{font-size:11px;font-weight:800;letter-spacing:.18em;padding:6px 12px;border-radius:20px;
+    border:2px solid var(--ink);text-transform:uppercase;}
+  .pill.demo{background:var(--mustard);color:var(--ink);}
+  .pill.live{background:var(--orange);color:var(--paper);}
+  .pill.live::before{content:"●";margin-right:6px;animation:blink 1.2s infinite;}
+  @keyframes blink{50%{opacity:.25;}}
+  .livebar input{font-family:inherit;font-size:12px;padding:9px 12px;border:2px solid var(--ink);border-radius:11px;
+    background:var(--paper);color:var(--ink);width:280px;letter-spacing:.04em;}
+  .livebar button{font-family:inherit;font-weight:700;font-size:12px;padding:9px 14px;border:2px solid var(--ink);
+    border-radius:11px;background:var(--ink);color:var(--paper);cursor:pointer;}
+  .livebar button.ghost{background:var(--paper);color:var(--ink);}
+  .livebar .getkey{font-size:11px;font-weight:700;letter-spacing:.06em;color:var(--avocado-dk);text-decoration:none;
+    border-bottom:1.5px dotted var(--avocado-dk);}
+  .livebar .info{font-size:12px;font-weight:600;color:var(--ink);margin-left:6px;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:38vw;}
+  .livebar .info.warn{color:var(--orange);}
+  .livebar .dev{display:none;}
+  .livebar.dev-on .dev{display:inline-block;}
+
+  #map-wrap{flex:1;position:relative;min-height:0;}
+  svg{width:100%;height:100%;display:block;}
+  .loop-line{fill:none;stroke:var(--avocado);stroke-width:11;stroke-linejoin:round;stroke-linecap:round;}
+  .loop-line.shadow{stroke:rgba(58,53,44,.10);transform:translate(0,5px);}
+  .st-label{font-size:11px;font-weight:600;fill:var(--ink);letter-spacing:.02em;pointer-events:none;}
+  .st-label.hub{font-size:13px;font-weight:700;}
+  .train{cursor:pointer;}
+  .train rect{stroke:rgba(58,53,44,.85);stroke-width:1.5;}
+
+  .legend{position:absolute;left:24px;bottom:22px;background:var(--paper);border:2px solid var(--ink);border-radius:15px;
+    padding:14px 16px;box-shadow:4px 4px 0 rgba(58,53,44,.15);display:flex;flex-direction:column;gap:11px;min-width:172px;}
+  .legend h3{margin:0 0 2px;font-size:10px;letter-spacing:.28em;text-transform:uppercase;color:var(--avocado-dk);font-weight:700;}
+  .legend .row{display:flex;align-items:center;gap:10px;font-size:13px;font-weight:600;}
+  .legend .chip{width:20px;height:11px;border-radius:3px;border:1.5px solid rgba(58,53,44,.85);}
+  .legend .row small{color:var(--avocado-dk);font-weight:600;margin-left:auto;font-size:11px;}
+
+  #tip{position:fixed;pointer-events:none;z-index:30;opacity:0;transform:translate(-50%,-118%);transition:opacity .12s;
+    background:var(--ink);color:var(--paper);padding:9px 13px;border-radius:11px;font-size:12px;line-height:1.5;
+    box-shadow:3px 3px 0 rgba(58,53,44,.25);white-space:nowrap;}
+  #tip .dir{font-weight:700;letter-spacing:.06em;} #tip .nx{opacity:.85;} #tip b{font-weight:700;}
+  #tip .dl{color:var(--mustard);font-weight:700;}
+
+  .credit{position:absolute;right:22px;bottom:18px;font-size:10px;letter-spacing:.16em;color:var(--avocado-dk);
+    text-transform:uppercase;font-weight:700;opacity:.7;}
+  @media (max-width:760px){.brand h1{font-size:19px;}.clock .time{font-size:22px;}.livebar input{width:180px;}.livebar .info{max-width:90vw;}}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="brand">
+      <div class="dot-row"><span class="knob"></span><h1>Yamanote&nbsp;Live</h1></div>
+      <small>山手線 運行トラッカー</small>
+    </div>
+    <div class="clock">
+      <div class="time" id="clock">--:--:--</div>
+      <div class="label" id="clock-label">Tokyo · 東京</div>
+    </div>
+    <div class="spacer"></div>
+    <div class="panel">
+      <div class="stat"><b id="cnt-total">0</b><span>列車</span></div>
+      <div class="stat"><b id="cnt-stop">0</b><span>停車中</span></div>
+      <div class="speeds" id="speeds">
+        <button data-s="1">1×</button><button data-s="30">30×</button>
+        <button data-s="60" class="active">60×</button><button data-s="120">120×</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="livebar">
+    <span class="pill demo" id="mode-pill">DEMO</span>
+    <input id="key" class="dev" type="text" placeholder="ODPT consumerKey を貼り付け" autocomplete="off" spellcheck="false">
+    <button id="connect" class="dev">LIVE接続</button>
+    <button id="demo" class="ghost">デモ</button>
+    <a class="getkey dev" href="https://developer.odpt.org/" target="_blank" rel="noopener">無料キーを取得 ↗</a>
+    <span class="info" id="info">キー未設定 — デモ運行中。リアルタイム表示には無料のODPTキーが必要です。</span>
+  </div>
+
+  <div id="map-wrap">
+    <svg id="map" preserveAspectRatio="xMidYMid meet"></svg>
+    <div class="legend">
+      <h3>運行系統</h3>
+      <div class="row"><span class="chip" style="background:var(--orange)"></span>外回り<small id="leg-out">0</small></div>
+      <div class="row"><span class="chip" style="background:var(--teal)"></span>内回り<small id="leg-in">0</small></div>
+      <div class="row" style="margin-top:4px"><span class="chip" style="background:var(--avocado);border-radius:6px;width:20px;height:6px"></span>山手線</div>
+    </div>
+    <div class="credit" id="credit">a mid-century departure board</div>
+  </div>
+</div>
+<div id="tip"></div>
+
+<script>
+const n_=30;
+// id = ODPTの駅サフィックス
+const STATIONS=[
+ {ja:"東京",ro:"Tokyo",id:"Tokyo",lat:35.6812,lon:139.7671,hub:true},
+ {ja:"神田",ro:"Kanda",id:"Kanda",lat:35.6918,lon:139.7708},
+ {ja:"秋葉原",ro:"Akihabara",id:"Akihabara",lat:35.6984,lon:139.7731},
+ {ja:"御徒町",ro:"Okachimachi",id:"Okachimachi",lat:35.7075,lon:139.7745},
+ {ja:"上野",ro:"Ueno",id:"Ueno",lat:35.7138,lon:139.7770,hub:true},
+ {ja:"鶯谷",ro:"Uguisudani",id:"Uguisudani",lat:35.7209,lon:139.7783},
+ {ja:"日暮里",ro:"Nippori",id:"Nippori",lat:35.7281,lon:139.7707},
+ {ja:"西日暮里",ro:"Nishi-Nippori",id:"NishiNippori",lat:35.7320,lon:139.7669},
+ {ja:"田端",ro:"Tabata",id:"Tabata",lat:35.7380,lon:139.7607},
+ {ja:"駒込",ro:"Komagome",id:"Komagome",lat:35.7365,lon:139.7480},
+ {ja:"巣鴨",ro:"Sugamo",id:"Sugamo",lat:35.7333,lon:139.7393},
+ {ja:"大塚",ro:"Otsuka",id:"Otsuka",lat:35.7313,lon:139.7285},
+ {ja:"池袋",ro:"Ikebukuro",id:"Ikebukuro",lat:35.7295,lon:139.7109,hub:true},
+ {ja:"目白",ro:"Mejiro",id:"Mejiro",lat:35.7212,lon:139.7065},
+ {ja:"高田馬場",ro:"Takadanobaba",id:"Takadanobaba",lat:35.7123,lon:139.7036},
+ {ja:"新大久保",ro:"Shin-Okubo",id:"ShinOkubo",lat:35.7013,lon:139.7000},
+ {ja:"新宿",ro:"Shinjuku",id:"Shinjuku",lat:35.6900,lon:139.7004,hub:true},
+ {ja:"代々木",ro:"Yoyogi",id:"Yoyogi",lat:35.6830,lon:139.7021},
+ {ja:"原宿",ro:"Harajuku",id:"Harajuku",lat:35.6702,lon:139.7027},
+ {ja:"渋谷",ro:"Shibuya",id:"Shibuya",lat:35.6580,lon:139.7016,hub:true},
+ {ja:"恵比寿",ro:"Ebisu",id:"Ebisu",lat:35.6467,lon:139.7100},
+ {ja:"目黒",ro:"Meguro",id:"Meguro",lat:35.6333,lon:139.7158},
+ {ja:"五反田",ro:"Gotanda",id:"Gotanda",lat:35.6259,lon:139.7233},
+ {ja:"大崎",ro:"Osaki",id:"Osaki",lat:35.6197,lon:139.7286},
+ {ja:"品川",ro:"Shinagawa",id:"Shinagawa",lat:35.6284,lon:139.7387,hub:true},
+ {ja:"高輪GW",ro:"Takanawa GW",id:"TakanawaGateway",lat:35.6357,lon:139.7407},
+ {ja:"田町",ro:"Tamachi",id:"Tamachi",lat:35.6457,lon:139.7476},
+ {ja:"浜松町",ro:"Hamamatsucho",id:"Hamamatsucho",lat:35.6553,lon:139.7569},
+ {ja:"新橋",ro:"Shimbashi",id:"Shimbashi",lat:35.6662,lon:139.7583},
+ {ja:"有楽町",ro:"Yurakucho",id:"Yurakucho",lat:35.6749,lon:139.7634},
+];
+const idMap={}; STATIONS.forEach((s,i)=>idMap[s.id]=i);
+
+// ---- 投影 ----
+const VB={w:1100,h:780,padX:150,padY:90};
+const lat0=35.69*Math.PI/180;
+(function fit(){
+ STATIONS.forEach(s=>{s.px=s.lon*Math.cos(lat0);s.py=-s.lat;});
+ let mnx=1e9,mxx=-1e9,mny=1e9,mxy=-1e9;
+ STATIONS.forEach(s=>{mnx=Math.min(mnx,s.px);mxx=Math.max(mxx,s.px);mny=Math.min(mny,s.py);mxy=Math.max(mxy,s.py);});
+ const sc=Math.min((VB.w-2*VB.padX)/(mxx-mnx),(VB.h-2*VB.padY)/(mxy-mny));
+ const ox=(VB.w-(mxx-mnx)*sc)/2, oy=(VB.h-(mxy-mny)*sc)/2;
+ STATIONS.forEach(s=>{s.x=(s.px-mnx)*sc+ox;s.y=(s.py-mny)*sc+oy;});
+})();
+const CX=STATIONS.reduce((a,s)=>a+s.x,0)/n_, CY=STATIONS.reduce((a,s)=>a+s.y,0)/n_;
+
+// 周長と区間所要の見積り
+let PERIM=0; for(let i=0;i<n_;i++){const a=STATIONS[i],b=STATIONS[(i+1)%n_];PERIM+=Math.hypot(a.x-b.x,a.y-b.y);}
+const LOOP_MOVE=2520; // 走行のみで約42分相当
+function segDur(ai,bi){const a=STATIONS[ai],b=STATIONS[bi];return Math.max(35,Math.hypot(a.x-b.x,a.y-b.y)/PERIM*LOOP_MOVE);}
+
+// ---- DEMO 用ループモデル ----
+const LOOP=3600, DWELL=28, PER_DIR=13;
+function buildLoop(order){
+ const n=order.length,seg=[];let tot=0;
+ for(let i=0;i<n;i++){const a=order[i],b=order[(i+1)%n];const d=Math.hypot(b.x-a.x,b.y-a.y);seg.push(d);tot+=d;}
+ const moveTotal=LOOP-n*DWELL;const ev=[];let t=0;
+ for(let i=0;i<n;i++){ev.push({t,dur:DWELL,type:'dwell',i});t+=DWELL;
+   const st=seg[i]/tot*moveTotal;ev.push({t,dur:st,type:'move',from:i,to:(i+1)%n});t+=st;}
+ return{order,ev,cycle:t};
+}
+const LOOPS={inner:buildLoop(STATIONS.slice()),outer:buildLoop(STATIONS.slice().reverse())};
+function posAt(loop,time){
+ const c=loop.cycle;let tm=((time%c)+c)%c;const ev=loop.ev;let e=ev[ev.length-1];
+ for(let k=0;k<ev.length;k++){if(tm>=ev[k].t&&tm<ev[k].t+ev[k].dur){e=ev[k];break;}}
+ if(e.type==='dwell'){const a=loop.order[e.i],nx=loop.order[(e.i+1)%loop.order.length];
+   return{x:a.x,y:a.y,deg:Math.atan2(nx.y-a.y,nx.x-a.x)*180/Math.PI,stopped:true,next:nx};}
+ const a=loop.order[e.from],b=loop.order[e.to],f=(tm-e.t)/e.dur;
+ return{x:a.x+(b.x-a.x)*f,y:a.y+(b.y-a.y)*f,deg:Math.atan2(b.y-a.y,b.x-a.x)*180/Math.PI,stopped:false,next:b};
+}
+
+// ---- SVG ----
+const NS="http://www.w3.org/2000/svg";
+const svg=document.getElementById("map");svg.setAttribute("viewBox",`0 0 ${VB.w} ${VB.h}`);
+function el(t,a){const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);return e;}
+let d="M";STATIONS.forEach((s,i)=>d+=`${i?"L":""}${s.x.toFixed(1)} ${s.y.toFixed(1)} `);d+="Z";
+svg.appendChild(el("path",{d,class:"loop-line shadow"}));
+svg.appendChild(el("path",{d,class:"loop-line"}));
+STATIONS.forEach(s=>{
+ if(s.hub){const r=9;svg.appendChild(el("rect",{x:s.x-r,y:s.y-r,width:2*r,height:2*r,rx:3.5,fill:"var(--paper)",stroke:"var(--ink)","stroke-width":3.5}));}
+ else svg.appendChild(el("circle",{cx:s.x,cy:s.y,r:6.2,fill:"var(--paper)",stroke:"var(--ink)","stroke-width":3}));
+ const dx=s.x-CX,dy=s.y-CY,m=Math.hypot(dx,dy)||1,off=s.hub?20:16;
+ const lx=s.x+dx/m*off,ly=s.y+dy/m*off;
+ const anc=dx>14?"start":dx<-14?"end":"middle";
+ const tx=el("text",{x:lx.toFixed(1),y:(ly+4).toFixed(1),"text-anchor":anc,class:"st-label"+(s.hub?" hub":"")});
+ tx.textContent=s.ja;svg.appendChild(tx);
+});
+const trainLayer=el("g",{});svg.appendChild(trainLayer);
+
+// ---- 列車DOM ----
+const tip=document.getElementById("tip");
+function makeEl(color){
+ const g=el("g",{class:"train"});
+ const body=el("rect",{x:-9,y:-5,width:18,height:10,rx:3.5,fill:color});
+ const core=el("rect",{x:-9,y:-5,width:4.5,height:10,rx:2,fill:"rgba(248,243,230,.85)"});
+ const hit=el("circle",{cx:0,cy:0,r:13,fill:"transparent"});
+ g.appendChild(body);g.appendChild(core);g.appendChild(hit);trainLayer.appendChild(g);
+ return{g,body};
+}
+function bindTip(t){
+ t.el.g.addEventListener("mousemove",e=>{
+   tip.style.opacity=1;tip.style.left=e.clientX+"px";tip.style.top=e.clientY+"px";
+   const arrow=t.dir==='outer'?"↻ 外回り":"↺ 内回り";
+   let h=`<div class="dir">${arrow}</div>`;
+   h+=`<div class="nx">${t._stopped?"停車中 →":"次は"} <b>${t._next||""}</b></div>`;
+   if(t.num)h+=`<div class="nx" style="opacity:.6">${t.num}</div>`;
+   if(t.delay>0)h+=`<div class="dl">遅延 約${Math.round(t.delay/60)}分</div>`;
+   tip.innerHTML=h;
+ });
+ t.el.g.addEventListener("mouseleave",()=>tip.style.opacity=0);
+}
+
+// ---- 状態 ----
+let mode='demo';            // 'demo' | 'live'
+let activeTrains=[];
+let speed=60, simT=8*3600, last=performance.now();
+const clockEl=document.getElementById('clock'), clockLabel=document.getElementById('clock-label');
+const cntTotal=document.getElementById('cnt-total'), cntStop=document.getElementById('cnt-stop');
+const legOut=document.getElementById('leg-out'), legIn=document.getElementById('leg-in');
+const speedsEl=document.getElementById('speeds'), infoEl=document.getElementById('info');
+const pill=document.getElementById('mode-pill'), credit=document.getElementById('credit');
+
+// ---- DEMO 構築 ----
+function buildDemo(){
+ clearTrains();
+ const mk=(dirKey,color)=>{
+   const loop=dirKey==='outer'?LOOPS.outer:LOOPS.inner;
+   for(let i=0;i<PER_DIR;i++){
+     const t={dir:dirKey,color,el:makeEl(color),offset:i*(LOOP/PER_DIR),loop};
+     t.update=now=>{const p=posAt(t.loop,simT+t.offset);
+       t.el.g.setAttribute('transform',`translate(${p.x.toFixed(2)} ${p.y.toFixed(2)}) rotate(${p.deg.toFixed(1)})`);
+       t._next=p.next.ja+"（"+p.next.ro+"）";t._stopped=p.stopped;};
+     bindTip(t);activeTrains.push(t);
+   }
+ };
+ mk('outer','var(--orange)');mk('inner','var(--teal)');
+ mode='demo';pill.textContent='DEMO';pill.className='pill demo';
+ speedsEl.classList.remove('hidden');credit.textContent='a mid-century departure board';
+}
+function clearTrains(){activeTrains.forEach(t=>t.el.g.remove());activeTrains=[];}
+
+// ---- LIVE ----
+const BASE='https://api.odpt.org/api/v4/';
+let liveMap=new Map(), pollTimer=null, key='';
+const stIdx=s=>s?idMap[String(s).split('.').pop()]:null;
+
+const PROXY={trains:'/api/trains',info:'/api/info'};   // 公開用: サーバー側でキーを隠蔽
+let useProxy=true;
+const directUrl=ep=>`${BASE}${ep}?odpt:railway=odpt.Railway:JR-East.Yamanote&acl:consumerKey=${encodeURIComponent(key)}`;
+function liveUrls(){
+ return useProxy?{t:PROXY.trains,i:PROXY.info}
+   :{t:directUrl('odpt:Train'),i:directUrl('odpt:TrainInformation')};
+}
+// opts: {} = プロキシで自動接続 / {key:'...'} = キー直接指定（ローカル確認用）
+async function startLive(opts){
+ if(pollTimer)clearInterval(pollTimer);
+ if(opts.key){useProxy=false;key=opts.key.trim();if(!key)return false;localStorage.setItem('odpt_key',key);}
+ else{useProxy=true;}
+ clearTrains();liveMap.clear();
+ mode='live';pill.textContent='LIVE';pill.className='pill live';
+ speedsEl.classList.add('hidden');clockLabel.textContent='JST · リアルタイム';
+ infoEl.classList.remove('warn');infoEl.textContent='接続中…';
+ try{
+   await poll();
+   pollTimer=setInterval(()=>poll().catch(e=>{infoEl.classList.add('warn');infoEl.textContent='更新エラー: '+e.message;}),20000);
+   return true;
+ }catch(e){
+   buildDemo();
+   infoEl.classList.add('warn');
+   infoEl.textContent=(useProxy?'自動LIVE接続不可（未デプロイ/ローカル表示）。':'')+'エラー: '+e.message;
+   return false;
+ }
+}
+async function poll(){
+ if(mode!=='live')return false;
+ const u=liveUrls();
+ const r=await fetch(u.t,{cache:'no-store'});
+ if(r.status===401||r.status===403)throw new Error('APIキーが無効です（'+r.status+'）');
+ if(!r.ok)throw new Error('取得失敗 ('+r.status+')');
+ const data=await r.json();
+ applyLive(data);
+ try{const ri=await fetch(u.i,{cache:'no-store'});if(ri.ok){const inf=await ri.json();
+   const txt=inf[0]&&(inf[0]['odpt:trainInformationText']?.ja||inf[0]['odpt:trainInformationText']||inf[0]['odpt:trainInformationStatus']?.ja);
+   setInfo(data.length,txt);}else setInfo(data.length);}catch{setInfo(data.length);}
+ return true;
+}
+function setInfo(count,txt){
+ infoEl.classList.remove('warn');
+ const t=new Date().toLocaleTimeString('ja-JP',{timeZone:'Asia/Tokyo'});
+ if(count===0){infoEl.textContent=`運行中の列車データなし（${t} 更新）— 運転時間外の可能性があります。`;return;}
+ infoEl.textContent=`${txt||'平常運転'}　/　${count}本を追跡中（${t} 更新）`;
+}
+function applyLive(data){
+ const seen=new Set();
+ for(const dt of data){
+   const id=dt['owl:sameAs']||dt['@id']||dt['odpt:trainNumber'];if(!id)continue;
+   seen.add(id);
+   const fromIdx=stIdx(dt['odpt:fromStation']);
+   const toIdx=stIdx(dt['odpt:toStation']);
+   const dir=(String(dt['odpt:railDirection']||'').split(':').pop()==='OuterLoop')?'outer':'inner';
+   const delay=dt['odpt:delay']||0;
+   const num=dt['odpt:trainNumber']||'';
+   let t=liveMap.get(id);
+   if(!t){t={dir,el:makeEl(dir==='outer'?'var(--orange)':'var(--teal)')};t.update=liveUpdate.bind(t);bindTip(t);liveMap.set(id,t);}
+   if(t.dir!==dir){t.dir=dir;t.el.body.setAttribute('fill',dir==='outer'?'var(--orange)':'var(--teal)');}
+   t.delay=delay;t.num=num;t._present=true;
+   const changed=(t.fromIdx!==fromIdx||t.toIdx!==toIdx);
+   if(changed||t.segStart==null){
+     t.fromIdx=fromIdx;t.toIdx=toIdx;t.segStart=performance.now();
+     t.segDur=(fromIdx!=null&&toIdx!=null)?segDur(fromIdx,toIdx):0;
+   }
+ }
+ for(const [id,t] of liveMap){if(!seen.has(id)){t.el.g.remove();liveMap.delete(id);}}
+ activeTrains=[...liveMap.values()];
+}
+function liveUpdate(now){
+ const t=this;if(t.fromIdx==null){t.el.g.setAttribute('opacity',0);return;}
+ t.el.g.setAttribute('opacity',1);
+ const a=STATIONS[t.fromIdx];let x=a.x,y=a.y,deg,stopped;
+ if(t.toIdx==null){
+   const ni=t.dir==='inner'?(t.fromIdx+1)%n_:(t.fromIdx-1+n_)%n_;const nx=STATIONS[ni];
+   deg=Math.atan2(nx.y-a.y,nx.x-a.x)*180/Math.PI;stopped=true;t._next=nx.ja+"（"+nx.ro+"）";
+ }else{
+   const b=STATIONS[t.toIdx];const f=Math.min(0.94,(now-t.segStart)/1000/Math.max(t.segDur,1));
+   x=a.x+(b.x-a.x)*f;y=a.y+(b.y-a.y)*f;deg=Math.atan2(b.y-a.y,b.x-a.x)*180/Math.PI;stopped=false;
+   t._next=b.ja+"（"+b.ro+"）";
+ }
+ t.el.g.setAttribute('transform',`translate(${x.toFixed(2)} ${y.toFixed(2)}) rotate(${deg.toFixed(1)})`);
+ t._stopped=stopped;
+}
+
+// ---- レンダリングループ ----
+function frame(now){
+ const dt=Math.min(0.1,(now-last)/1000);last=now;
+ if(mode==='demo'){
+   simT+=dt*speed;const sec=Math.floor(simT)%86400;
+   const hh=String(Math.floor(sec/3600)).padStart(2,'0'),mm=String(Math.floor(sec/60)%60).padStart(2,'0'),ss=String(sec%60).padStart(2,'0');
+   clockEl.textContent=`${hh}:${mm}:${ss}`;
+ }else{
+   clockEl.textContent=new Date().toLocaleTimeString('ja-JP',{timeZone:'Asia/Tokyo'});
+ }
+ let stop=0,out=0,inn=0;
+ for(const t of activeTrains){t.update(now);if(t._stopped)stop++;if(t.dir==='outer')out++;else inn++;}
+ cntTotal.textContent=activeTrains.length;cntStop.textContent=stop;legOut.textContent=out;legIn.textContent=inn;
+ requestAnimationFrame(frame);
+}
+
+// ---- UI ----
+speedsEl.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;
+ speed=+b.dataset.s;[...speedsEl.children].forEach(x=>x.classList.toggle('active',x===b));});
+const livebar=document.querySelector('.livebar');
+const revealDev=()=>livebar.classList.add('dev-on');
+document.getElementById('connect').addEventListener('click',()=>startLive({key:document.getElementById('key').value}));
+document.getElementById('key').addEventListener('keydown',e=>{if(e.key==='Enter')startLive({key:e.target.value});});
+document.getElementById('demo').addEventListener('click',()=>{if(pollTimer)clearInterval(pollTimer);buildDemo();
+ infoEl.classList.remove('warn');infoEl.textContent='デモ運行中。';clockLabel.textContent='Tokyo · 東京';});
+
+// 起動
+buildDemo();
+requestAnimationFrame(frame);
+(async()=>{
+ infoEl.textContent='リアルタイム接続を試行中…';
+ const ok=await startLive({});           // まずサーバー側プロキシで自動接続（公開時）
+ if(!ok){
+   revealDev();                          // ローカル/未デプロイ時は手動キー入力を表示
+   const saved=localStorage.getItem('odpt_key');
+   if(saved){document.getElementById('key').value=saved;await startLive({key:saved});}
+ }
+})();
+</script>
+</body>
+</html>
