@@ -255,14 +255,23 @@ function bindTip(t){
 }
 
 // ---- 状態 ----
-let mode='demo';            // 'demo' | 'live'
+let mode='demo';            // 'demo'(実時刻連動の擬似ダイヤ) | 'live'(実データ)
 let activeTrains=[];
-let speed=60, simT=8*3600, last=performance.now();
+let speed=1, simT=8*3600, last=performance.now();   // speed=1: 実時刻に連動
 const clockEl=document.getElementById('clock'), clockLabel=document.getElementById('clock-label');
 const cntTotal=document.getElementById('cnt-total'), cntStop=document.getElementById('cnt-stop');
 const legOut=document.getElementById('leg-out'), legIn=document.getElementById('leg-in');
 const speedsEl=document.getElementById('speeds'), infoEl=document.getElementById('info');
 const pill=document.getElementById('mode-pill'), credit=document.getElementById('credit');
+
+// ---- 実時刻(JST)連動ヘルパー ----
+function jstSecOfDay(){const s=new Date().toLocaleTimeString('en-GB',{timeZone:'Asia/Tokyo',hour12:false});const[H,M,S]=s.split(':').map(Number);return H*3600+M*60+S;}
+const SVC_START=4*3600+26*60, SVC_END=1*3600+20*60;          // 始発04:26 / 終電01:20
+const inService=sec=>sec>=SVC_START||sec<SVC_END;
+const isLocal=location.protocol==='file:'||['localhost','127.0.0.1'].includes(location.hostname);
+let demoInfoText='実時刻に連動した擬似ダイヤを表示中（実データではありません）。';
+let svcMsgShown=false;
+function applyDemoInfo(){infoEl.classList.remove('warn');infoEl.textContent=demoInfoText;}
 
 // ---- DEMO 構築 ----
 function buildDemo(){
@@ -278,8 +287,11 @@ function buildDemo(){
    }
  };
  mk('outer','var(--orange)');mk('inner','var(--teal)');
- mode='demo';pill.textContent='DEMO';pill.className='pill demo';
+ mode='demo';pill.textContent='SIM';pill.className='pill demo';
  speedsEl.classList.remove('hidden');credit.textContent='a mid-century departure board';
+ clockLabel.textContent=speed===1?'JST · 実時刻連動':'プレビュー '+speed+'×';
+ demoInfoText='実時刻に連動した擬似ダイヤを表示中（実データではありません）。';
+ svcMsgShown=false;applyDemoInfo();
 }
 function clearTrains(){activeTrains.forEach(t=>t.el.g.remove());activeTrains=[];}
 
@@ -309,9 +321,14 @@ async function startLive(opts){
    pollTimer=setInterval(()=>poll().catch(e=>{infoEl.classList.add('warn');infoEl.textContent='更新エラー: '+e.message;}),20000);
    return true;
  }catch(e){
-   buildDemo();
-   infoEl.classList.add('warn');
-   infoEl.textContent=(useProxy?'自動LIVE接続不可（未デプロイ/ローカル表示）。':'')+'エラー: '+e.message;
+   buildDemo();   // 失敗時は実時刻連動の擬似ダイヤへ
+   if(useProxy&&e.message==='NOKEY'){
+     demoInfoText='APIキー設定前のため、実時刻に連動した擬似ダイヤを表示中です（キー設定後に自動で実運行へ切替）。';applyDemoInfo();
+   }else if(useProxy&&!isLocal){
+     demoInfoText='現在リアルタイムデータを取得できないため、実時刻連動の擬似ダイヤを表示中です。';applyDemoInfo();
+   }else{
+     infoEl.classList.add('warn');infoEl.textContent='エラー: '+e.message;
+   }
    return false;
  }
 }
@@ -320,6 +337,7 @@ async function poll(){
  const u=liveUrls();
  const r=await fetch(u.t,{cache:'no-store'});
  if(r.status===401||r.status===403)throw new Error('APIキーが無効です（'+r.status+'）');
+ if(r.status===500)throw new Error('NOKEY');   // サーバーにキー未設定
  if(!r.ok)throw new Error('取得失敗 ('+r.status+')');
  const data=await r.json();
  applyLive(data);
@@ -376,28 +394,41 @@ function liveUpdate(now){
 // ---- レンダリングループ ----
 function frame(now){
  const dt=Math.min(0.1,(now-last)/1000);last=now;
+ let outOfService=false;
  if(mode==='demo'){
-   simT+=dt*speed;const sec=Math.floor(simT)%86400;
+   const realSec=jstSecOfDay();
+   if(speed===1)simT=realSec;            // 実時刻に同期（誰が見ても同じ“今”の状態）
+   else simT+=dt*speed;                  // 高速プレビュー（実時刻から切り離して早送り）
+   const sec=Math.floor(speed===1?realSec:simT)%86400;
    const hh=String(Math.floor(sec/3600)).padStart(2,'0'),mm=String(Math.floor(sec/60)%60).padStart(2,'0'),ss=String(sec%60).padStart(2,'0');
    clockEl.textContent=`${hh}:${mm}:${ss}`;
+   outOfService=(speed===1)&&!inService(realSec);
  }else{
    clockEl.textContent=new Date().toLocaleTimeString('ja-JP',{timeZone:'Asia/Tokyo'});
  }
- let stop=0,out=0,inn=0;
- for(const t of activeTrains){t.update(now);if(t._stopped)stop++;if(t.dir==='outer')out++;else inn++;}
- cntTotal.textContent=activeTrains.length;cntStop.textContent=stop;legOut.textContent=out;legIn.textContent=inn;
+ if(outOfService){
+   trainLayer.setAttribute('opacity',0);
+   cntTotal.textContent=0;cntStop.textContent=0;legOut.textContent=0;legIn.textContent=0;
+   if(!svcMsgShown){infoEl.classList.remove('warn');infoEl.textContent='現在は運行時間外です（始発 04:26 / 終電 01:20）。実時刻に連動して待機中。';svcMsgShown=true;}
+ }else{
+   trainLayer.setAttribute('opacity',1);
+   if(mode==='demo'&&svcMsgShown){svcMsgShown=false;applyDemoInfo();}
+   let stop=0,out=0,inn=0;
+   for(const t of activeTrains){t.update(now);if(t._stopped)stop++;if(t.dir==='outer')out++;else inn++;}
+   cntTotal.textContent=activeTrains.length;cntStop.textContent=stop;legOut.textContent=out;legIn.textContent=inn;
+ }
  requestAnimationFrame(frame);
 }
 
 // ---- UI ----
 speedsEl.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;
- speed=+b.dataset.s;[...speedsEl.children].forEach(x=>x.classList.toggle('active',x===b));});
+ speed=+b.dataset.s;[...speedsEl.children].forEach(x=>x.classList.toggle('active',x===b));
+ if(mode==='demo')clockLabel.textContent=speed===1?'JST · 実時刻連動':'プレビュー '+speed+'×';});
 const livebar=document.querySelector('.livebar');
 const revealDev=()=>livebar.classList.add('dev-on');
 document.getElementById('connect').addEventListener('click',()=>startLive({key:document.getElementById('key').value}));
 document.getElementById('key').addEventListener('keydown',e=>{if(e.key==='Enter')startLive({key:e.target.value});});
-document.getElementById('demo').addEventListener('click',()=>{if(pollTimer)clearInterval(pollTimer);buildDemo();
- infoEl.classList.remove('warn');infoEl.textContent='デモ運行中。';clockLabel.textContent='Tokyo · 東京';});
+document.getElementById('demo').addEventListener('click',()=>{if(pollTimer)clearInterval(pollTimer);buildDemo();});
 
 // 起動
 buildDemo();
@@ -405,8 +436,8 @@ requestAnimationFrame(frame);
 (async()=>{
  infoEl.textContent='リアルタイム接続を試行中…';
  const ok=await startLive({});           // まずサーバー側プロキシで自動接続（公開時）
- if(!ok){
-   revealDev();                          // ローカル/未デプロイ時は手動キー入力を表示
+ if(!ok&&isLocal){                        // ローカル確認時のみ手動キー入力を表示
+   revealDev();
    const saved=localStorage.getItem('odpt_key');
    if(saved){document.getElementById('key').value=saved;await startLive({key:saved});}
  }
