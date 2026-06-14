@@ -435,7 +435,7 @@ function buildDemo(){
  demoInfoText='実ダイヤ（時間帯別の運転間隔）に連動した擬似運行を表示中。実データではありません。';
  gotoNow();
 }
-const demoClockLabel=()=>demoState==='now'?'JST · 実時刻連動':demoState==='play'?'1日ダイジェスト':'タイムトラベル';
+const demoClockLabel=()=>demoState==='now'?'JST · 実時刻連動':demoState==='play'?'1日ダイジェスト':demoState==='paused'?'⏸ 一時停止':'タイムトラベル';
 function clearTrains(){activeTrains.forEach(t=>t.el.g.remove());activeTrains=[];}
 
 // ---- LIVE ----
@@ -576,8 +576,10 @@ const setTbActive=btn=>[nowBtn,playBtn].forEach(b=>b.classList.toggle('active',b
 function gotoNow(){demoState='now';nightRun=false;setTbActive(nowBtn);playBtn.innerHTML=PLAY_LABEL(false);
  clockLabel.textContent=demoClockLabel();applyDemoInfo();}
 function playFull(){
- if(demoState==='play'){gotoNow();return;}                   // トグルで停止→今
- demoState='play';nightRun=false;tlSpeed=480;simT=12600;      // 03:30開始（24時間を約3分）
+ if(demoState==='play'){                                     // 再生中 → その場で一時停止
+   demoState='paused';playBtn.innerHTML=PLAY_LABEL(false);clockLabel.textContent=demoClockLabel();return;}
+ if(demoState==='now')simT=12600;                            // 実時刻連動から始める時だけ最初(03:30)から
+ demoState='play';nightRun=false;tlSpeed=480;                // 一時停止/スクラブからは続きから再開
  setTbActive(playBtn);playBtn.innerHTML=PLAY_LABEL(true);clockLabel.textContent=demoClockLabel();
  demoInfoText='1日ダイジェスト：24時間を約3分で。始発→ラッシュ→終電まで。';applyDemoInfo();}
 nowBtn.addEventListener('click',gotoNow);
