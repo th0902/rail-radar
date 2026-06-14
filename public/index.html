@@ -241,18 +241,16 @@ const STATIONS=[
 ];
 const idMap={}; STATIONS.forEach((s,i)=>idMap[s.id]=i);
 
-// ---- 投影 ----
-const VB={w:1100,h:780,padX:150,padY:90};
-const lat0=35.69*Math.PI/180;
-(function fit(){
- STATIONS.forEach(s=>{s.px=s.lon*Math.cos(lat0);s.py=-s.lat;});
- let mnx=1e9,mxx=-1e9,mny=1e9,mxy=-1e9;
- STATIONS.forEach(s=>{mnx=Math.min(mnx,s.px);mxx=Math.max(mxx,s.px);mny=Math.min(mny,s.py);mxy=Math.max(mxy,s.py);});
- const sc=Math.min((VB.w-2*VB.padX)/(mxx-mnx),(VB.h-2*VB.padY)/(mxy-mny));
- const ox=(VB.w-(mxx-mnx)*sc)/2, oy=(VB.h-(mxy-mny)*sc)/2;
- STATIONS.forEach(s=>{s.x=(s.px-mnx)*sc+ox;s.y=(s.py-mny)*sc+oy;});
+// ---- レイアウト：山手線は実形より「綺麗な円」で（駅を円周上に等間隔配置） ----
+const VB={w:900,h:880};
+const CX=VB.w/2, CY=VB.h/2;
+const R=Math.min(VB.w,VB.h)/2-140;          // 駅名ラベル用の余白
+(function layout(){
+ STATIONS.forEach((s,i)=>{
+   const a=-Math.PI/2 + i/n_*2*Math.PI;     // 東京(index0)を頂点に、時計回り
+   s.x=CX+R*Math.cos(a); s.y=CY+R*Math.sin(a);
+ });
 })();
-const CX=STATIONS.reduce((a,s)=>a+s.x,0)/n_, CY=STATIONS.reduce((a,s)=>a+s.y,0)/n_;
 
 // 周長と区間所要の見積り
 let PERIM=0; for(let i=0;i<n_;i++){const a=STATIONS[i],b=STATIONS[(i+1)%n_];PERIM+=Math.hypot(a.x-b.x,a.y-b.y);}
