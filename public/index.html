@@ -246,7 +246,7 @@ const VB={w:900,h:880};
 const CX=VB.w/2, CY=VB.h/2;
 const R=Math.min(VB.w,VB.h)/2-140;          // 駅名ラベル用の余白
 (function layout(){
- const ROT=0.31;                            // 東京を右(東)やや下に＝実際のJR路線図の向き
+ const ROT=0;                               // 東京をちょうど右(3時)に＝実際のJR路線図の向き
  STATIONS.forEach((s,i)=>{
    const a=ROT - i/n_*2*Math.PI;            // 駅番号順は地理的に反時計回り（内回り＝反時計回りで実際と一致）
    s.x=CX+R*Math.cos(a); s.y=CY+R*Math.sin(a);
