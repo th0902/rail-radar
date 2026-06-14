@@ -24,6 +24,7 @@
     --avocado:#8FA659; --avocado-dk:#6E8443;
     --orange:#C8552E; --teal:#2E7B86; --mustard:#E0A52E;
     --ink:#3A352C; --paper:#F8F3E6;
+    --map-fg:#3A352C;   /* 駅名・中央ヒーローの文字色（夜は自動で明るく） */
   }
   *{box-sizing:border-box;}
   html,body{margin:0;height:100%;}
@@ -78,7 +79,7 @@
   svg{width:100%;height:100%;display:block;}
   .loop-line{fill:none;stroke:var(--avocado);stroke-width:11;stroke-linejoin:round;stroke-linecap:round;}
   .loop-line.shadow{stroke:rgba(58,53,44,.10);transform:translate(0,5px);}
-  .st-label{font-size:11px;font-weight:600;fill:var(--ink);letter-spacing:.02em;pointer-events:none;}
+  .st-label{font-size:11px;font-weight:600;fill:var(--map-fg);letter-spacing:.02em;pointer-events:none;}
   .st-label.hub{font-size:13px;font-weight:700;}
   .train{cursor:pointer;}
   .train rect{stroke:rgba(58,53,44,.85);stroke-width:1.5;}
@@ -132,12 +133,12 @@
     border:2.5px solid var(--ink);cursor:pointer;}
   .tbtime{font-size:17px;font-weight:700;font-variant-numeric:tabular-nums;min-width:54px;text-align:right;}
 
-  /* phase ribbon (時間帯 + 走行本数) — 録画動画が自己説明的になる核 */
-  #phase{position:absolute;top:14px;left:50%;transform:translateX(-50%);z-index:15;text-align:center;pointer-events:none;}
-  .phasecard{display:inline-block;background:var(--paper);border:2px solid var(--ink);border-radius:16px;
-    padding:7px 18px 8px;box-shadow:3px 3px 0 rgba(58,53,44,.14);}
-  .phasecard .pmain{font-size:19px;font-weight:800;letter-spacing:.04em;line-height:1.1;}
-  .phasecard .psub{font-size:11px;font-weight:700;color:var(--avocado-dk);letter-spacing:.08em;margin-top:3px;}
+  /* center hero — 円の中央に 時刻 / 時間帯 / 走行本数（ポスター化＋動画が自己説明的に） */
+  #hero{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:14;text-align:center;pointer-events:none;width:min(46%,360px);}
+  #hero .h-label{font-size:11px;font-weight:700;letter-spacing:.30em;text-transform:uppercase;color:var(--map-fg);opacity:.65;}
+  #hero .h-time{font-size:62px;font-weight:700;letter-spacing:.01em;font-variant-numeric:tabular-nums;line-height:1.02;color:var(--map-fg);margin-top:2px;}
+  #hero .h-phase{font-size:23px;font-weight:800;letter-spacing:.04em;color:var(--map-fg);margin-top:8px;}
+  #hero .h-sub{font-size:13px;font-weight:700;letter-spacing:.10em;color:var(--map-fg);opacity:.7;margin-top:5px;}
 
   /* share button — 拡散の摩擦をゼロに */
   .sharebtn{font-family:inherit;font-weight:800;font-size:13px;letter-spacing:.04em;padding:10px 18px;
@@ -160,7 +161,7 @@
     #timebar{padding:9px 12px;gap:7px;} .tbtn{font-size:12px;padding:8px 10px;}
     .tbtime{font-size:15px;min-width:46px;}
     .credit{display:none;}
-    #phase{top:10px;} .phasecard{padding:6px 14px;} .phasecard .pmain{font-size:16px;} .phasecard .psub{font-size:10px;}
+    #hero .h-time{font-size:40px;} #hero .h-phase{font-size:18px;} #hero .h-label{font-size:9px;letter-spacing:.22em;} #hero .h-sub{font-size:11px;}
     .sharebtn{padding:8px 13px;font-size:12px;}
   }
   @media (max-width:420px){
@@ -176,15 +177,7 @@
       <div class="dot-row"><span class="knob"></span><h1>Rail&nbsp;Radar</h1></div>
       <small>東京の鼓動を、ひとつの円で。</small>
     </div>
-    <div class="clock">
-      <div class="time" id="clock">--:--:--</div>
-      <div class="label" id="clock-label">Tokyo · 東京</div>
-    </div>
     <div class="spacer"></div>
-    <div class="panel">
-      <div class="stat"><b id="cnt-total">0</b><span>列車</span></div>
-      <div class="stat"><b id="cnt-stop">0</b><span>停車中</span></div>
-    </div>
     <button id="shareBtn" class="sharebtn">📤 シェア</button>
   </header>
 
@@ -200,7 +193,12 @@
   <div id="map-wrap">
     <svg id="map" preserveAspectRatio="xMidYMid meet"></svg>
     <div id="nightveil"></div>
-    <div id="phase"><div class="phasecard"><div class="pmain" id="phase-main">—</div><div class="psub" id="phase-sub"></div></div></div>
+    <div id="hero">
+      <div class="h-label" id="clock-label">JST · 実時刻連動</div>
+      <div class="h-time" id="clock">--:--:--</div>
+      <div class="h-phase" id="phase-main">—</div>
+      <div class="h-sub" id="phase-sub"></div>
+    </div>
     <div id="stcard"></div>
     <div class="legend">
       <h3>運行系統</h3>
@@ -367,7 +365,6 @@ let demoState='now';        // 'now'(実時刻連動) | 'play'(早回し) | 'scr
 let tlSpeed=480, nightRun=false;    // tlSpeed: 早回し倍率（480=24時間を約3分）
 let selSt=null;             // 選択中の駅index
 const clockEl=document.getElementById('clock'), clockLabel=document.getElementById('clock-label');
-const cntTotal=document.getElementById('cnt-total'), cntStop=document.getElementById('cnt-stop');
 const legOut=document.getElementById('leg-out'), legIn=document.getElementById('leg-in');
 const infoEl=document.getElementById('info'), pill=document.getElementById('mode-pill');
 const timebar=document.getElementById('timebar'), nightveil=document.getElementById('nightveil');
@@ -582,7 +579,6 @@ function frame(now){
    shownT=simT;
    clockEl.textContent=fmtHMS(shownT);
    outOfService=!inService(shownT);
-   nightveil.style.opacity=nightFactor(shownT);
    if(demoState!=='scrub')scrub.value=Math.floor(shownT);
    scrubTime.textContent=fmtHM(shownT);
    refreshDemoTrains(dayTime(shownT));   // 実ダイヤから現在走っている列車を再構成
@@ -591,16 +587,20 @@ function frame(now){
  }
  if(outOfService){
    trainLayer.setAttribute('opacity',0);
-   cntTotal.textContent=0;cntStop.textContent=0;legOut.textContent=0;legIn.textContent=0;
+   legOut.textContent=0;legIn.textContent=0;
    if(!svcMsgShown){infoEl.classList.remove('warn');infoEl.textContent='現在は運行時間外です（始発 04:26 / 終電 01:20）。実時刻に連動して待機中。';svcMsgShown=true;}
  }else{
    trainLayer.setAttribute('opacity',1);
    if(mode==='demo'&&svcMsgShown){svcMsgShown=false;applyDemoInfo();}
-   let stop=0,out=0,inn=0;
-   for(const t of activeTrains){t.update(now);if(t._stopped)stop++;if(t.dir==='outer')out++;else inn++;}
-   cntTotal.textContent=activeTrains.length;cntStop.textContent=stop;legOut.textContent=out;legIn.textContent=inn;
+   let out=0,inn=0;
+   for(const t of activeTrains){t.update(now);if(t.dir==='outer')out++;else inn++;}
+   legOut.textContent=out;legIn.textContent=inn;
  }
  const psec=mode==='demo'?shownT:jstSecOfDay();
+ const nf=nightFactor(psec);                       // 夜の濃さ
+ nightveil.style.opacity=nf;
+ const k=Math.min(1,nf/0.45);                      // 文字色を夜は明るく（可読性確保）
+ document.documentElement.style.setProperty('--map-fg',`rgb(${58+(239-58)*k|0},${53+(231-53)*k|0},${44+(213-44)*k|0})`);
  const ph=phaseInfo(psec, outOfService?0:activeTrains.length);
  phaseMain.textContent=ph.main; phaseSub.textContent=ph.sub;
  updateCard(psec);
