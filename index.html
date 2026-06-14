@@ -2,8 +2,19 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>YAMANOTE LIVE — 山手線トラッカー</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Rail Radar — 山手線をリアルタイムに</title>
+<meta name="description" content="山手線をフライトトラッカー風に可視化。実時刻に連動して内回り・外回りの電車が走る、Mini Metro風ミッドセンチュリーな運行マップ。">
+<meta name="theme-color" content="#ECE3CF">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Rail Radar">
+<meta property="og:title" content="Rail Radar — 山手線をリアルタイムに">
+<meta property="og:description" content="今この瞬間の山手線を、Mini Metro風のミッドセンチュリーなマップで。内回り・外回りの電車が実時刻に連動して走ります。">
+<meta property="og:image" content="/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Rail Radar — 山手線をリアルタイムに">
+<meta name="twitter:description" content="今この瞬間の山手線を、Mini Metro風のミッドセンチュリーなマップで。">
+<meta name="twitter:image" content="/og.png">
 <style>
   :root{
     --sand:#ECE3CF; --sand-deep:#E3D8BE;
@@ -38,13 +49,6 @@
     display:flex;flex-direction:column;align-items:center;min-width:60px;box-shadow:3px 3px 0 rgba(58,53,44,.13);}
   .stat b{font-size:22px;font-variant-numeric:tabular-nums;line-height:1;}
   .stat span{font-size:9px;letter-spacing:.16em;margin-top:5px;color:var(--avocado-dk);text-transform:uppercase;font-weight:700;}
-
-  .speeds{display:flex;border:2px solid var(--ink);border-radius:13px;overflow:hidden;box-shadow:3px 3px 0 rgba(58,53,44,.13);}
-  .speeds button{border:none;background:var(--paper);color:var(--ink);font-family:inherit;font-weight:700;font-size:13px;
-    padding:11px 13px;cursor:pointer;border-right:2px solid var(--ink);}
-  .speeds button:last-child{border-right:none;}
-  .speeds button.active{background:var(--ink);color:var(--paper);}
-  .speeds.hidden{display:none;}
 
   /* live bar */
   .livebar{display:flex;align-items:center;gap:10px;padding:2px 26px 12px;flex-wrap:wrap;}
@@ -89,17 +93,70 @@
   #tip .dir{font-weight:700;letter-spacing:.06em;} #tip .nx{opacity:.85;} #tip b{font-weight:700;}
   #tip .dl{color:var(--mustard);font-weight:700;}
 
-  .credit{position:absolute;right:22px;bottom:18px;font-size:10px;letter-spacing:.16em;color:var(--avocado-dk);
-    text-transform:uppercase;font-weight:700;opacity:.7;}
-  @media (max-width:760px){.brand h1{font-size:19px;}.clock .time{font-size:22px;}.livebar input{width:180px;}.livebar .info{max-width:90vw;}}
+  .credit{position:absolute;right:22px;bottom:14px;font-size:10px;letter-spacing:.16em;color:var(--avocado-dk);
+    text-transform:uppercase;font-weight:700;opacity:.7;pointer-events:none;}
+
+  /* night veil (timelapse mood) */
+  #nightveil{position:absolute;inset:0;background:#161d2b;opacity:0;pointer-events:none;
+    transition:opacity .4s linear;mix-blend-mode:multiply;}
+
+  /* station card (自分の駅 / 次は何分後) */
+  #stcard{position:absolute;right:18px;top:16px;z-index:20;display:none;min-width:184px;
+    background:var(--paper);border:2px solid var(--ink);border-radius:16px;padding:14px 16px 12px;
+    box-shadow:5px 5px 0 rgba(58,53,44,.16);}
+  #stcard .stname{font-size:20px;font-weight:700;line-height:1;margin-bottom:12px;padding-right:18px;}
+  #stcard .stname span{font-size:11px;font-weight:700;color:var(--avocado-dk);letter-spacing:.08em;margin-left:6px;}
+  #stcard .nextrow{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;margin:7px 0;}
+  #stcard .ddot{width:14px;height:9px;border-radius:3px;border:1.5px solid rgba(58,53,44,.8);}
+  #stcard .nextrow b{margin-left:auto;font-size:18px;font-variant-numeric:tabular-nums;letter-spacing:.02em;}
+  #stcard .stnote{font-size:10px;color:var(--avocado-dk);font-weight:700;letter-spacing:.04em;margin-top:9px;}
+  #stcard .stclose{position:absolute;top:8px;right:10px;border:none;background:none;font-size:18px;
+    line-height:1;color:var(--ink);cursor:pointer;font-family:inherit;padding:2px;}
+
+  /* time bar (実時刻 / 1日ダイジェスト / 終電 / スクラブ) */
+  #timebar{display:none;align-items:center;gap:10px;padding:11px 24px;border-top:2px solid var(--ink);
+    background:var(--paper);flex-wrap:wrap;}
+  #timebar.show{display:flex;}
+  .tbtn{font-family:inherit;font-weight:700;font-size:13px;padding:9px 13px;border:2px solid var(--ink);
+    border-radius:11px;background:var(--paper);color:var(--ink);cursor:pointer;white-space:nowrap;
+    box-shadow:2px 2px 0 rgba(58,53,44,.13);}
+  .tbtn.active{background:var(--ink);color:var(--paper);}
+  #scrub{flex:1;min-width:140px;height:8px;-webkit-appearance:none;appearance:none;border-radius:6px;
+    background:linear-gradient(90deg,var(--avocado),var(--mustard));border:2px solid var(--ink);outline:none;}
+  #scrub::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;border-radius:50%;
+    background:var(--orange);border:2.5px solid var(--ink);cursor:pointer;}
+  #scrub::-moz-range-thumb{width:16px;height:16px;border-radius:50%;background:var(--orange);
+    border:2.5px solid var(--ink);cursor:pointer;}
+  .tbtime{font-size:17px;font-weight:700;font-variant-numeric:tabular-nums;min-width:54px;text-align:right;}
+
+  /* mobile */
+  @media (max-width:760px){
+    header{gap:10px 12px;padding:10px 14px 6px;}
+    .spacer{display:none;} .panel{display:none;}
+    .brand h1{font-size:17px;letter-spacing:.16em;} .brand small{font-size:9px;letter-spacing:.28em;}
+    .clock{margin-left:0;} .clock .time{font-size:21px;}
+    .stat{min-width:46px;padding:6px 8px;} .stat b{font-size:16px;}
+    .livebar{padding:0 14px 8px;gap:7px;} .livebar input{width:150px;} .livebar .info{max-width:92vw;font-size:11px;margin-left:0;}
+    .legend{left:12px;bottom:12px;padding:9px 11px;min-width:0;gap:7px;}
+    .legend h3{font-size:9px;} .legend .row{font-size:11px;gap:7px;}
+    #stcard{right:10px;top:10px;min-width:150px;padding:11px 13px 10px;}
+    #stcard .stname{font-size:17px;} #stcard .nextrow b{font-size:16px;}
+    #timebar{padding:9px 12px;gap:7px;} .tbtn{font-size:12px;padding:8px 10px;}
+    .tbtime{font-size:15px;min-width:46px;}
+    .credit{display:none;}
+  }
+  @media (max-width:420px){
+    .tbtn .lbl-long{display:none;}
+    #scrub{min-width:90px;}
+  }
 </style>
 </head>
 <body>
 <div id="app">
   <header>
     <div class="brand">
-      <div class="dot-row"><span class="knob"></span><h1>Yamanote&nbsp;Live</h1></div>
-      <small>山手線 運行トラッカー</small>
+      <div class="dot-row"><span class="knob"></span><h1>Rail&nbsp;Radar</h1></div>
+      <small>山手線 — Yamanote Line</small>
     </div>
     <div class="clock">
       <div class="time" id="clock">--:--:--</div>
@@ -109,10 +166,6 @@
     <div class="panel">
       <div class="stat"><b id="cnt-total">0</b><span>列車</span></div>
       <div class="stat"><b id="cnt-stop">0</b><span>停車中</span></div>
-      <div class="speeds" id="speeds">
-        <button data-s="1" class="active">1×</button><button data-s="30">30×</button>
-        <button data-s="60">60×</button><button data-s="120">120×</button>
-      </div>
     </div>
   </header>
 
@@ -127,6 +180,8 @@
 
   <div id="map-wrap">
     <svg id="map" preserveAspectRatio="xMidYMid meet"></svg>
+    <div id="nightveil"></div>
+    <div id="stcard"></div>
     <div class="legend">
       <h3>運行系統</h3>
       <div class="row"><span class="chip" style="background:var(--orange)"></span>外回り<small id="leg-out">0</small></div>
@@ -134,6 +189,14 @@
       <div class="row" style="margin-top:4px"><span class="chip" style="background:var(--avocado);border-radius:6px;width:20px;height:6px"></span>山手線</div>
     </div>
     <div class="credit" id="credit">a mid-century departure board</div>
+  </div>
+
+  <div id="timebar">
+    <button class="tbtn active" id="nowBtn">● 今</button>
+    <button class="tbtn" id="playBtn">▶ <span class="lbl-long">1日</span>ダイジェスト</button>
+    <button class="tbtn" id="lastBtn">🌙 終電</button>
+    <input id="scrub" type="range" min="0" max="86399" value="0" aria-label="時刻">
+    <span class="tbtime" id="scrubTime">--:--</span>
   </div>
 </div>
 <div id="tip"></div>
@@ -220,14 +283,21 @@ function el(t,a){const e=document.createElementNS(NS,t);for(const k in a)e.setAt
 let d="M";STATIONS.forEach((s,i)=>d+=`${i?"L":""}${s.x.toFixed(1)} ${s.y.toFixed(1)} `);d+="Z";
 svg.appendChild(el("path",{d,class:"loop-line shadow"}));
 svg.appendChild(el("path",{d,class:"loop-line"}));
-STATIONS.forEach(s=>{
- if(s.hub){const r=9;svg.appendChild(el("rect",{x:s.x-r,y:s.y-r,width:2*r,height:2*r,rx:3.5,fill:"var(--paper)",stroke:"var(--ink)","stroke-width":3.5}));}
- else svg.appendChild(el("circle",{cx:s.x,cy:s.y,r:6.2,fill:"var(--paper)",stroke:"var(--ink)","stroke-width":3}));
+const stMarks=[];
+STATIONS.forEach((s,i)=>{
+ let mk;
+ if(s.hub){const r=9;mk=el("rect",{x:s.x-r,y:s.y-r,width:2*r,height:2*r,rx:3.5,fill:"var(--paper)",stroke:"var(--ink)","stroke-width":3.5});}
+ else mk=el("circle",{cx:s.x,cy:s.y,r:6.2,fill:"var(--paper)",stroke:"var(--ink)","stroke-width":3});
+ svg.appendChild(mk);stMarks.push(mk);
  const dx=s.x-CX,dy=s.y-CY,m=Math.hypot(dx,dy)||1,off=s.hub?20:16;
  const lx=s.x+dx/m*off,ly=s.y+dy/m*off;
  const anc=dx>14?"start":dx<-14?"end":"middle";
  const tx=el("text",{x:lx.toFixed(1),y:(ly+4).toFixed(1),"text-anchor":anc,class:"st-label"+(s.hub?" hub":"")});
  tx.textContent=s.ja;svg.appendChild(tx);
+ // タップ判定（透明・少し大きめ）
+ const hit=el("circle",{cx:s.x,cy:s.y,r:17,fill:"transparent",style:"cursor:pointer"});
+ hit.addEventListener('click',()=>selectStation(i));
+ svg.appendChild(hit);
 });
 const trainLayer=el("g",{});svg.appendChild(trainLayer);
 
@@ -257,12 +327,17 @@ function bindTip(t){
 // ---- 状態 ----
 let mode='demo';            // 'demo'(実時刻連動の擬似ダイヤ) | 'live'(実データ)
 let activeTrains=[];
-let speed=1, simT=8*3600, last=performance.now();   // speed=1: 実時刻に連動
+let simT=8*3600, last=performance.now();
+let demoState='now';        // 'now'(実時刻連動) | 'play'(早回し) | 'scrub'(時刻指定)
+let tlSpeed=1440, nightRun=false;   // tlSpeed: 早回し倍率（1440=24時間を60秒）
+let selSt=null;             // 選択中の駅index
 const clockEl=document.getElementById('clock'), clockLabel=document.getElementById('clock-label');
 const cntTotal=document.getElementById('cnt-total'), cntStop=document.getElementById('cnt-stop');
 const legOut=document.getElementById('leg-out'), legIn=document.getElementById('leg-in');
-const speedsEl=document.getElementById('speeds'), infoEl=document.getElementById('info');
-const pill=document.getElementById('mode-pill'), credit=document.getElementById('credit');
+const infoEl=document.getElementById('info'), pill=document.getElementById('mode-pill');
+const timebar=document.getElementById('timebar'), nightveil=document.getElementById('nightveil');
+const scrub=document.getElementById('scrub'), scrubTime=document.getElementById('scrubTime'), stcard=document.getElementById('stcard');
+const nowBtn=document.getElementById('nowBtn'), playBtn=document.getElementById('playBtn'), lastBtn=document.getElementById('lastBtn');
 
 // ---- 実時刻(JST)連動ヘルパー ----
 function jstSecOfDay(){const s=new Date().toLocaleTimeString('en-GB',{timeZone:'Asia/Tokyo',hour12:false});const[H,M,S]=s.split(':').map(Number);return H*3600+M*60+S;}
@@ -272,6 +347,43 @@ const isLocal=location.protocol==='file:'||['localhost','127.0.0.1'].includes(lo
 let demoInfoText='実時刻に連動した擬似ダイヤを表示中（実データではありません）。';
 let svcMsgShown=false;
 function applyDemoInfo(){infoEl.classList.remove('warn');infoEl.textContent=demoInfoText;}
+
+// ---- 時刻/可視化ヘルパー ----
+const pad=n=>String(n|0).padStart(2,'0');
+const fmtHMS=s=>{s=((Math.floor(s))%86400+86400)%86400;return pad(s/3600)+':'+pad((s/60)%60)+':'+pad(s%60);};
+const fmtHM=s=>{s=((Math.floor(s))%86400+86400)%86400;return pad(s/3600)+':'+pad((s/60)%60);};
+// 夜の濃さ（タイムラプスの雰囲気）: 昼0 → 深夜0.55
+function nightFactor(t){const h=((t/3600)%24+24)%24;if(h>=6&&h<=18)return 0;const d=Math.min(h<6?6-h:h-18,6);return 0.55*(d/6);}
+// 次の電車までの秒数（スケジュール目安・両モード共通）
+const HEAD=LOOP/PER_DIR;
+function nextArrival(loop,station,tmod){
+ const i=loop.order.indexOf(station);
+ const dw=loop.ev.find(e=>e.type==='dwell'&&e.i===i);const E=dw.t;
+ let best=Infinity;
+ for(let k=0;k<PER_DIR;k++){const w=(((E+k*HEAD-tmod)%LOOP)+LOOP)%LOOP;if(w<best)best=w;}
+ return best;
+}
+function selectStation(i){
+ selSt=i;const s=STATIONS[i];
+ stcard.innerHTML=`<button class="stclose" aria-label="閉じる">×</button>`+
+   `<div class="stname">${s.ja}<span>${s.ro}</span></div>`+
+   `<div class="nextrow"><span class="ddot" style="background:var(--orange)"></span>外回り<b id="w-out">--</b></div>`+
+   `<div class="nextrow"><span class="ddot" style="background:var(--teal)"></span>内回り<b id="w-in">--</b></div>`+
+   `<div class="stnote">次の電車・目安（実時刻連動）</div>`;
+ stcard.style.display='block';
+ stcard.querySelector('.stclose').addEventListener('click',()=>{selSt=null;stcard.style.display='none';updateMarks();});
+ updateMarks();
+}
+function updateMarks(){stMarks.forEach((m,i)=>m.setAttribute('fill',i===selSt?'var(--mustard)':'var(--paper)'));}
+function fmtWait(w){return w<25?'まもなく':Math.floor(w/60)+':'+pad(w%60);}
+function updateCard(t){
+ if(selSt==null)return;
+ const wo=stcard.querySelector('#w-out'), wi=stcard.querySelector('#w-in');if(!wo)return;
+ if(!inService(t)){wo.textContent='—';wi.textContent='—';return;}
+ const tmod=((t%LOOP)+LOOP)%LOOP;
+ wo.textContent=fmtWait(nextArrival(LOOPS.outer,STATIONS[selSt],tmod));
+ wi.textContent=fmtWait(nextArrival(LOOPS.inner,STATIONS[selSt],tmod));
+}
 
 // ---- DEMO 構築 ----
 function buildDemo(){
@@ -288,11 +400,12 @@ function buildDemo(){
  };
  mk('outer','var(--orange)');mk('inner','var(--teal)');
  mode='demo';pill.textContent='SIM';pill.className='pill demo';
- speedsEl.classList.remove('hidden');credit.textContent='a mid-century departure board';
- clockLabel.textContent=speed===1?'JST · 実時刻連動':'プレビュー '+speed+'×';
+ timebar.classList.add('show');
+ demoState='now';nightRun=false;svcMsgShown=false;
  demoInfoText='実時刻に連動した擬似ダイヤを表示中（実データではありません）。';
- svcMsgShown=false;applyDemoInfo();
+ gotoNow();
 }
+const demoClockLabel=()=>demoState==='now'?'JST · 実時刻連動':demoState==='play'?(nightRun?'🌙 終電ダイジェスト':'1日ダイジェスト'):'タイムトラベル';
 function clearTrains(){activeTrains.forEach(t=>t.el.g.remove());activeTrains=[];}
 
 // ---- LIVE ----
@@ -314,7 +427,7 @@ async function startLive(opts){
  else{useProxy=true;}
  clearTrains();liveMap.clear();
  mode='live';pill.textContent='LIVE';pill.className='pill live';
- speedsEl.classList.add('hidden');clockLabel.textContent='JST · リアルタイム';
+ timebar.classList.remove('show');nightveil.style.opacity=0;clockLabel.textContent='JST · リアルタイム';
  infoEl.classList.remove('warn');infoEl.textContent='接続中…';
  try{
    await poll();
@@ -394,15 +507,20 @@ function liveUpdate(now){
 // ---- レンダリングループ ----
 function frame(now){
  const dt=Math.min(0.1,(now-last)/1000);last=now;
- let outOfService=false;
+ let outOfService=false, shownT=0;
  if(mode==='demo'){
-   const realSec=jstSecOfDay();
-   if(speed===1)simT=realSec;            // 実時刻に同期（誰が見ても同じ“今”の状態）
-   else simT+=dt*speed;                  // 高速プレビュー（実時刻から切り離して早送り）
-   const sec=Math.floor(speed===1?realSec:simT)%86400;
-   const hh=String(Math.floor(sec/3600)).padStart(2,'0'),mm=String(Math.floor(sec/60)%60).padStart(2,'0'),ss=String(sec%60).padStart(2,'0');
-   clockEl.textContent=`${hh}:${mm}:${ss}`;
-   outOfService=(speed===1)&&!inService(realSec);
+   if(demoState==='now'){simT=jstSecOfDay();}            // 実時刻に同期（誰が見ても同じ“今”）
+   else if(demoState==='play'){                          // 早回し
+     simT+=dt*tlSpeed;
+     if(simT>=86400)simT-=86400;
+     if(nightRun&&simT>=5400&&simT<85320)simT=85320;     // 終電の時間帯(23:42→01:30)をループ
+   }                                                      // 'scrub' は simT 固定
+   shownT=simT;
+   clockEl.textContent=fmtHMS(shownT);
+   outOfService=!inService(shownT);
+   nightveil.style.opacity=nightFactor(shownT);
+   if(demoState!=='scrub')scrub.value=Math.floor(shownT);
+   scrubTime.textContent=fmtHM(shownT);
  }else{
    clockEl.textContent=new Date().toLocaleTimeString('ja-JP',{timeZone:'Asia/Tokyo'});
  }
@@ -417,13 +535,31 @@ function frame(now){
    for(const t of activeTrains){t.update(now);if(t._stopped)stop++;if(t.dir==='outer')out++;else inn++;}
    cntTotal.textContent=activeTrains.length;cntStop.textContent=stop;legOut.textContent=out;legIn.textContent=inn;
  }
+ updateCard(mode==='demo'?shownT:jstSecOfDay());
  requestAnimationFrame(frame);
 }
 
-// ---- UI ----
-speedsEl.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;
- speed=+b.dataset.s;[...speedsEl.children].forEach(x=>x.classList.toggle('active',x===b));
- if(mode==='demo')clockLabel.textContent=speed===1?'JST · 実時刻連動':'プレビュー '+speed+'×';});
+// ---- UI: タイムバー ----
+const PLAY_LABEL=p=>`${p?'⏸':'▶'} <span class="lbl-long">1日</span>ダイジェスト`;
+const setTbActive=btn=>[nowBtn,playBtn,lastBtn].forEach(b=>b.classList.toggle('active',b===btn));
+function gotoNow(){demoState='now';nightRun=false;setTbActive(nowBtn);playBtn.innerHTML=PLAY_LABEL(false);
+ clockLabel.textContent=demoClockLabel();applyDemoInfo();}
+function playFull(){
+ if(demoState==='play'&&!nightRun){gotoNow();return;}        // トグルで停止→今
+ demoState='play';nightRun=false;tlSpeed=1440;simT=12600;     // 03:30開始（24時間を約60秒）
+ setTbActive(playBtn);playBtn.innerHTML=PLAY_LABEL(true);clockLabel.textContent=demoClockLabel();
+ demoInfoText='1日ダイジェスト：24時間を約60秒で。始発→ラッシュ→終電。';applyDemoInfo();}
+function playLast(){
+ demoState='play';nightRun=true;tlSpeed=160;simT=85320;       // 23:42開始（終電チェイス）
+ setTbActive(lastBtn);playBtn.innerHTML=PLAY_LABEL(false);clockLabel.textContent=demoClockLabel();
+ demoInfoText='終電モード：深夜、最後の電車が1本ずつ消えていきます。';applyDemoInfo();}
+nowBtn.addEventListener('click',gotoNow);
+playBtn.addEventListener('click',playFull);
+lastBtn.addEventListener('click',playLast);
+scrub.addEventListener('input',e=>{demoState='scrub';nightRun=false;simT=+e.target.value;
+ setTbActive(null);playBtn.innerHTML=PLAY_LABEL(false);clockLabel.textContent=demoClockLabel();});
+
+// ---- UI: LIVE/デモ ----
 const livebar=document.querySelector('.livebar');
 const revealDev=()=>livebar.classList.add('dev-on');
 document.getElementById('connect').addEventListener('click',()=>startLive({key:document.getElementById('key').value}));

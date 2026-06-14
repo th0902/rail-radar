@@ -1,0 +1,51 @@
+<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
+  *{margin:0;box-sizing:border-box;}
+  :root{--sand:#ECE3CF;--avocado:#8FA659;--orange:#C8552E;--teal:#2E7B86;--mustard:#E0A52E;--ink:#3A352C;--paper:#F8F3E6;}
+  html,body{width:1200px;height:630px;}
+  body{background:radial-gradient(120% 130% at 65% 0%,#F2EAD8 0%,var(--sand) 60%,#E3D8BE 100%);
+    font-family:"Futura","Century Gothic","Avenir Next","Hiragino Kaku Gothic ProN",sans-serif;
+    color:var(--ink);overflow:hidden;position:relative;}
+  .left{position:absolute;left:72px;top:118px;width:560px;}
+  .knob{display:inline-block;width:26px;height:26px;border-radius:50%;background:var(--avocado);
+    border:5px solid var(--ink);vertical-align:middle;margin-right:18px;}
+  .kick{font-size:20px;letter-spacing:.5em;font-weight:700;color:var(--avocado);text-transform:uppercase;}
+  h1{font-size:104px;letter-spacing:.04em;font-weight:700;text-transform:uppercase;line-height:.95;margin:22px 0 0;}
+  .jp{font-size:40px;font-weight:700;margin-top:26px;letter-spacing:.04em;}
+  .sub{font-size:23px;font-weight:700;color:#6E8443;margin-top:20px;letter-spacing:.06em;}
+  .tags{margin-top:34px;display:flex;gap:12px;}
+  .tag{font-size:18px;font-weight:700;border:3px solid var(--ink);border-radius:30px;padding:9px 20px;background:var(--paper);}
+  svg{position:absolute;right:-40px;top:-30px;}
+</style></head><body>
+  <svg width="640" height="690" viewBox="0 0 640 690">
+    <!-- loop -->
+    <ellipse cx="360" cy="345" rx="232" ry="292" fill="none" stroke="rgba(58,53,44,.10)" stroke-width="26" transform="translate(0,7)"/>
+    <ellipse cx="360" cy="345" rx="232" ry="292" fill="none" stroke="#8FA659" stroke-width="26"/>
+    <!-- stations -->
+    <g fill="#F8F3E6" stroke="#3A352C" stroke-width="7">
+      <circle cx="360" cy="53" r="13"/><circle cx="500" cy="105" r="13"/><circle cx="568" cy="240" r="13"/>
+      <circle cx="589" cy="420" r="13"/><circle cx="505" cy="560" r="13"/><circle cx="360" cy="637" r="13"/>
+      <circle cx="215" cy="560" r="13"/><circle cx="131" cy="420" r="13"/><circle cx="152" cy="240" r="13"/>
+      <circle cx="220" cy="105" r="13"/>
+    </g>
+    <!-- hubs (squares) -->
+    <g fill="#F8F3E6" stroke="#3A352C" stroke-width="7">
+      <rect x="345" y="38" width="30" height="30" rx="5"/><rect x="574" y="330" width="30" height="30" rx="5"/>
+      <rect x="345" y="622" width="30" height="30" rx="5"/><rect x="116" y="330" width="30" height="30" rx="5"/>
+    </g>
+    <!-- trains -->
+    <g stroke="rgba(58,53,44,.85)" stroke-width="3">
+      <rect x="548" y="150" width="42" height="23" rx="8" fill="#C8552E" transform="rotate(58 569 161)"/>
+      <rect x="470" y="600" width="42" height="23" rx="8" fill="#C8552E" transform="rotate(150 491 611)"/>
+      <rect x="150" y="510" width="42" height="23" rx="8" fill="#2E7B86" transform="rotate(232 171 521)"/>
+      <rect x="138" y="175" width="42" height="23" rx="8" fill="#2E7B86" transform="rotate(312 159 186)"/>
+      <rect x="300" y="40" width="42" height="23" rx="8" fill="#C8552E" transform="rotate(20 321 51)"/>
+    </g>
+  </svg>
+  <div class="left">
+    <div><span class="knob"></span><span class="kick">Rail&nbsp;Radar</span></div>
+    <h1>Rail<br>Radar</h1>
+    <div class="jp">山手線を、リアルタイムに。</div>
+    <div class="sub">a mid-century transit tracker</div>
+    <div class="tags"><span class="tag">外回り / 内回り</span><span class="tag">実時刻連動</span></div>
+  </div>
+</body></html>
