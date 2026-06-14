@@ -1,0 +1,10 @@
+{
+  // Cloudflare Workers 設定（GitHub連携の Workers Builds が参照）
+  "name": "rail-radar",
+  "main": "worker.js",
+  "compatibility_date": "2025-06-01",
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS"
+  }
+}
