@@ -197,7 +197,6 @@
   <div id="timebar">
     <button class="tbtn active" id="nowBtn">● 今</button>
     <button class="tbtn" id="playBtn">▶ <span class="lbl-long">1日</span>ダイジェスト</button>
-    <button class="tbtn" id="lastBtn">🌙 終電</button>
     <input id="scrub" type="range" min="0" max="86399" value="0" aria-label="時刻">
     <span class="tbtime" id="scrubTime">--:--</span>
   </div>
@@ -331,7 +330,7 @@ let mode='demo';            // 'demo'(実時刻連動の擬似ダイヤ) | 'live
 let activeTrains=[];
 let simT=8*3600, last=performance.now();
 let demoState='now';        // 'now'(実時刻連動) | 'play'(早回し) | 'scrub'(時刻指定)
-let tlSpeed=1440, nightRun=false;   // tlSpeed: 早回し倍率（1440=24時間を60秒）
+let tlSpeed=480, nightRun=false;    // tlSpeed: 早回し倍率（480=24時間を約3分）
 let selSt=null;             // 選択中の駅index
 const clockEl=document.getElementById('clock'), clockLabel=document.getElementById('clock-label');
 const cntTotal=document.getElementById('cnt-total'), cntStop=document.getElementById('cnt-stop');
@@ -339,7 +338,7 @@ const legOut=document.getElementById('leg-out'), legIn=document.getElementById('
 const infoEl=document.getElementById('info'), pill=document.getElementById('mode-pill');
 const timebar=document.getElementById('timebar'), nightveil=document.getElementById('nightveil');
 const scrub=document.getElementById('scrub'), scrubTime=document.getElementById('scrubTime'), stcard=document.getElementById('stcard');
-const nowBtn=document.getElementById('nowBtn'), playBtn=document.getElementById('playBtn'), lastBtn=document.getElementById('lastBtn');
+const nowBtn=document.getElementById('nowBtn'), playBtn=document.getElementById('playBtn');
 
 // ---- 実時刻(JST)連動ヘルパー ----
 function jstSecOfDay(){const s=new Date().toLocaleTimeString('en-GB',{timeZone:'Asia/Tokyo',hour12:false});const[H,M,S]=s.split(':').map(Number);return H*3600+M*60+S;}
@@ -543,21 +542,16 @@ function frame(now){
 
 // ---- UI: タイムバー ----
 const PLAY_LABEL=p=>`${p?'⏸':'▶'} <span class="lbl-long">1日</span>ダイジェスト`;
-const setTbActive=btn=>[nowBtn,playBtn,lastBtn].forEach(b=>b.classList.toggle('active',b===btn));
+const setTbActive=btn=>[nowBtn,playBtn].forEach(b=>b.classList.toggle('active',b===btn));
 function gotoNow(){demoState='now';nightRun=false;setTbActive(nowBtn);playBtn.innerHTML=PLAY_LABEL(false);
  clockLabel.textContent=demoClockLabel();applyDemoInfo();}
 function playFull(){
- if(demoState==='play'&&!nightRun){gotoNow();return;}        // トグルで停止→今
- demoState='play';nightRun=false;tlSpeed=1440;simT=12600;     // 03:30開始（24時間を約60秒）
+ if(demoState==='play'){gotoNow();return;}                   // トグルで停止→今
+ demoState='play';nightRun=false;tlSpeed=480;simT=12600;      // 03:30開始（24時間を約3分）
  setTbActive(playBtn);playBtn.innerHTML=PLAY_LABEL(true);clockLabel.textContent=demoClockLabel();
- demoInfoText='1日ダイジェスト：24時間を約60秒で。始発→ラッシュ→終電。';applyDemoInfo();}
-function playLast(){
- demoState='play';nightRun=true;tlSpeed=160;simT=85320;       // 23:42開始（終電チェイス）
- setTbActive(lastBtn);playBtn.innerHTML=PLAY_LABEL(false);clockLabel.textContent=demoClockLabel();
- demoInfoText='終電モード：深夜、最後の電車が1本ずつ消えていきます。';applyDemoInfo();}
+ demoInfoText='1日ダイジェスト：24時間を約3分で。始発→ラッシュ→終電まで。';applyDemoInfo();}
 nowBtn.addEventListener('click',gotoNow);
 playBtn.addEventListener('click',playFull);
-lastBtn.addEventListener('click',playLast);
 scrub.addEventListener('input',e=>{demoState='scrub';nightRun=false;simT=+e.target.value;
  setTbActive(null);playBtn.innerHTML=PLAY_LABEL(false);clockLabel.textContent=demoClockLabel();});
 
