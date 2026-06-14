@@ -258,7 +258,7 @@ const LOOP_MOVE=2520; // 走行のみで約42分相当
 function segDur(ai,bi){const a=STATIONS[ai],b=STATIONS[bi];return Math.max(35,Math.hypot(a.x-b.x,a.y-b.y)/PERIM*LOOP_MOVE);}
 
 // ---- DEMO 用ループモデル ----
-const LOOP=3600, DWELL=28, PER_DIR=13;
+const LOOP=3900, DWELL=25;   // 1周約65分・各駅停車25秒（本数は時刻表ベースで動的に決まる）
 function buildLoop(order){
  const n=order.length,seg=[];let tot=0;
  for(let i=0;i<n;i++){const a=order[i],b=order[(i+1)%n];const d=Math.hypot(b.x-a.x,b.y-a.y);seg.push(d);tot+=d;}
@@ -268,6 +268,23 @@ function buildLoop(order){
  return{order,ev,cycle:t};
 }
 const LOOPS={inner:buildLoop(STATIONS.slice()),outer:buildLoop(STATIONS.slice().reverse())};
+
+// ---- 実ダイヤ（時間帯別の運転間隔）に基づく擬似ダイヤ ----
+// 拡張タイムライン: 4:26(15960)〜25:10。深夜(0:00-1:20)は +86400 して連続扱い。
+const FIRST=4*3600+26*60, LAST_DEP=25*3600+10*60;      // 始発4:26 / 最終出区 25:10頃
+const isHoliday=['Sat','Sun'].includes(new Date().toLocaleDateString('en-US',{timeZone:'Asia/Tokyo',weekday:'short'}));
+// [この時刻(h)以降, 運転間隔(秒)] — 実際の運転間隔を反映（平日/土休日）
+const HW_WEEKDAY=[[4.43,360],[5.5,300],[6.5,240],[7.5,170],[9.5,210],[10,300],[16,240],[17,200],[20,240],[21,270],[23,330],[24,420]];
+const HW_HOLIDAY=[[4.43,360],[6,300],[7,255],[9,230],[20,260],[22,330],[23.5,420]];
+const HW=isHoliday?HW_HOLIDAY:HW_WEEKDAY;
+function headway(sec){const h=sec/3600;let v=HW[0][1];for(const[from,s]of HW){if(h>=from)v=s;else break;}return v;}
+function genDepartures(off){const P=[];let p=FIRST+off;while(p<=LAST_DEP){P.push(p);p+=headway(p);}return P;}
+const DEP={inner:genDepartures(0), outer:genDepartures(120)};   // 外回りは少しずらして交互に
+// 大崎(車庫)を起点に：各ループでの大崎通過位相
+function stPhase(loop,st){const i=loop.order.indexOf(st);return loop.ev.find(e=>e.type==='dwell'&&e.i===i).t;}
+const OSAKI=23;
+const osakiPhase={inner:stPhase(LOOPS.inner,STATIONS[OSAKI]), outer:stPhase(LOOPS.outer,STATIONS[OSAKI])};
+const dayTime=sec=>sec<4800?sec+86400:sec;             // 0:00〜1:20 は前日深夜の続きとして扱う
 function posAt(loop,time){
  const c=loop.cycle;let tm=((time%c)+c)%c;const ev=loop.ev;let e=ev[ev.length-1];
  for(let k=0;k<ev.length;k++){if(tm>=ev[k].t&&tm<ev[k].t+ev[k].dur){e=ev[k];break;}}
@@ -355,14 +372,15 @@ const fmtHMS=s=>{s=((Math.floor(s))%86400+86400)%86400;return pad(s/3600)+':'+pa
 const fmtHM=s=>{s=((Math.floor(s))%86400+86400)%86400;return pad(s/3600)+':'+pad((s/60)%60);};
 // 夜の濃さ（タイムラプスの雰囲気）: 昼0 → 深夜0.55
 function nightFactor(t){const h=((t/3600)%24+24)%24;if(h>=6&&h<=18)return 0;const d=Math.min(h<6?6-h:h-18,6);return 0.55*(d/6);}
-// 次の電車までの秒数（スケジュール目安・両モード共通）
-const HEAD=LOOP/PER_DIR;
-function nextArrival(loop,station,tmod){
- const i=loop.order.indexOf(station);
- const dw=loop.ev.find(e=>e.type==='dwell'&&e.i===i);const E=dw.t;
- let best=Infinity;
- for(let k=0;k<PER_DIR;k++){const w=(((E+k*HEAD-tmod)%LOOP)+LOOP)%LOOP;if(w<best)best=w;}
- return best;
+// 次の電車までの秒数（実ダイヤの出発スケジュールから算出）
+function travelOsakiTo(dirKey,station){
+ const loop=dirKey==='outer'?LOOPS.outer:LOOPS.inner;
+ return (((stPhase(loop,station)-osakiPhase[dirKey])%LOOP)+LOOP)%LOOP;
+}
+function nextArrival(dirKey,station,dayT){
+ const tOS=travelOsakiTo(dirKey,station), P=DEP[dirKey];
+ for(const p of P){const arr=p+tOS;if(arr>=dayT)return arr-dayT;}
+ return Infinity;   // 本日の運行終了
 }
 function selectStation(i){
  selSt=i;const s=STATIONS[i];
@@ -370,43 +388,54 @@ function selectStation(i){
    `<div class="stname">${s.ja}<span>${s.ro}</span></div>`+
    `<div class="nextrow"><span class="ddot" style="background:var(--orange)"></span>外回り<b id="w-out">--</b></div>`+
    `<div class="nextrow"><span class="ddot" style="background:var(--teal)"></span>内回り<b id="w-in">--</b></div>`+
-   `<div class="stnote">次の電車・目安（実時刻連動）</div>`;
+   `<div class="stnote">次の電車（実ダイヤ目安）</div>`;
  stcard.style.display='block';
  stcard.querySelector('.stclose').addEventListener('click',()=>{selSt=null;stcard.style.display='none';updateMarks();});
  updateMarks();
 }
 function updateMarks(){stMarks.forEach((m,i)=>m.setAttribute('fill',i===selSt?'var(--mustard)':'var(--paper)'));}
-function fmtWait(w){return w<25?'まもなく':Math.floor(w/60)+':'+pad(w%60);}
+function fmtWait(w){return !isFinite(w)?'—':w<25?'まもなく':Math.floor(w/60)+':'+pad(w%60);}
 function updateCard(t){
  if(selSt==null)return;
  const wo=stcard.querySelector('#w-out'), wi=stcard.querySelector('#w-in');if(!wo)return;
  if(!inService(t)){wo.textContent='—';wi.textContent='—';return;}
- const tmod=((t%LOOP)+LOOP)%LOOP;
- wo.textContent=fmtWait(nextArrival(LOOPS.outer,STATIONS[selSt],tmod));
- wi.textContent=fmtWait(nextArrival(LOOPS.inner,STATIONS[selSt],tmod));
+ const dayT=dayTime(t);
+ wo.textContent=fmtWait(nextArrival('outer',STATIONS[selSt],dayT));
+ wi.textContent=fmtWait(nextArrival('inner',STATIONS[selSt],dayT));
 }
 
-// ---- DEMO 構築 ----
-function buildDemo(){
- clearTrains();
- const mk=(dirKey,color)=>{
-   const loop=dirKey==='outer'?LOOPS.outer:LOOPS.inner;
-   for(let i=0;i<PER_DIR;i++){
-     const t={dir:dirKey,color,el:makeEl(color),offset:i*(LOOP/PER_DIR),loop};
-     t.update=now=>{const p=posAt(t.loop,simT+t.offset);
-       t.el.g.setAttribute('transform',`translate(${p.x.toFixed(2)} ${p.y.toFixed(2)}) rotate(${p.deg.toFixed(1)})`);
-       t._next=p.next.ja+"（"+p.next.ro+"）";t._stopped=p.stopped;};
-     bindTip(t);activeTrains.push(t);
+// ---- DEMO 構築（実ダイヤベース） ----
+let demoPool=new Map();   // key: dir+発車時刻 → train
+function demoUpdate(){const p=posAt(this._loop,this._phase);
+ this.el.g.setAttribute('transform',`translate(${p.x.toFixed(2)} ${p.y.toFixed(2)}) rotate(${p.deg.toFixed(1)})`);
+ this._next=p.next.ja+'（'+p.next.ro+'）';this._stopped=p.stopped;}
+function refreshDemoTrains(dayT){
+ const seen=new Set();
+ for(const dir of ['inner','outer']){
+   const loop=dir==='outer'?LOOPS.outer:LOOPS.inner, P=DEP[dir], osP=osakiPhase[dir];
+   const color=dir==='outer'?'var(--orange)':'var(--teal)';
+   for(const p of P){
+     const age=dayT-p;
+     if(age<0)break;            // P昇順：これ以降は未発車
+     if(age>=LOOP)continue;     // 1周終えて出区済み
+     const key=dir+p; seen.add(key);
+     let t=demoPool.get(key);
+     if(!t){t={dir,el:makeEl(color)};t.update=demoUpdate.bind(t);bindTip(t);demoPool.set(key,t);}
+     t._loop=loop; t._phase=osP+age;
    }
- };
- mk('outer','var(--orange)');mk('inner','var(--teal)');
+ }
+ for(const[k,t]of demoPool){if(!seen.has(k)){t.el.g.remove();demoPool.delete(k);}}
+ activeTrains=[...demoPool.values()];
+}
+function buildDemo(){
+ clearTrains();demoPool.clear();
  mode='demo';pill.textContent='SIM';pill.className='pill demo';
  timebar.classList.add('show');
  demoState='now';nightRun=false;svcMsgShown=false;
- demoInfoText='実時刻に連動した擬似ダイヤを表示中（実データではありません）。';
+ demoInfoText='実ダイヤ（時間帯別の運転間隔）に連動した擬似運行を表示中。実データではありません。';
  gotoNow();
 }
-const demoClockLabel=()=>demoState==='now'?'JST · 実時刻連動':demoState==='play'?(nightRun?'🌙 終電ダイジェスト':'1日ダイジェスト'):'タイムトラベル';
+const demoClockLabel=()=>demoState==='now'?'JST · 実時刻連動':demoState==='play'?'1日ダイジェスト':'タイムトラベル';
 function clearTrains(){activeTrains.forEach(t=>t.el.g.remove());activeTrains=[];}
 
 // ---- LIVE ----
@@ -426,7 +455,7 @@ async function startLive(opts){
  if(pollTimer)clearInterval(pollTimer);
  if(opts.key){useProxy=false;key=opts.key.trim();if(!key)return false;localStorage.setItem('odpt_key',key);}
  else{useProxy=true;}
- clearTrains();liveMap.clear();
+ clearTrains();liveMap.clear();demoPool.clear();
  mode='live';pill.textContent='LIVE';pill.className='pill live';
  timebar.classList.remove('show');nightveil.style.opacity=0;clockLabel.textContent='JST · リアルタイム';
  infoEl.classList.remove('warn');infoEl.textContent='接続中…';
@@ -522,6 +551,7 @@ function frame(now){
    nightveil.style.opacity=nightFactor(shownT);
    if(demoState!=='scrub')scrub.value=Math.floor(shownT);
    scrubTime.textContent=fmtHM(shownT);
+   refreshDemoTrains(dayTime(shownT));   // 実ダイヤから現在走っている列車を再構成
  }else{
    clockEl.textContent=new Date().toLocaleTimeString('ja-JP',{timeZone:'Asia/Tokyo'});
  }
