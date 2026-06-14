@@ -132,6 +132,19 @@
     border:2.5px solid var(--ink);cursor:pointer;}
   .tbtime{font-size:17px;font-weight:700;font-variant-numeric:tabular-nums;min-width:54px;text-align:right;}
 
+  /* phase ribbon (時間帯 + 走行本数) — 録画動画が自己説明的になる核 */
+  #phase{position:absolute;top:14px;left:50%;transform:translateX(-50%);z-index:15;text-align:center;pointer-events:none;}
+  .phasecard{display:inline-block;background:var(--paper);border:2px solid var(--ink);border-radius:16px;
+    padding:7px 18px 8px;box-shadow:3px 3px 0 rgba(58,53,44,.14);}
+  .phasecard .pmain{font-size:19px;font-weight:800;letter-spacing:.04em;line-height:1.1;}
+  .phasecard .psub{font-size:11px;font-weight:700;color:var(--avocado-dk);letter-spacing:.08em;margin-top:3px;}
+
+  /* share button — 拡散の摩擦をゼロに */
+  .sharebtn{font-family:inherit;font-weight:800;font-size:13px;letter-spacing:.04em;padding:10px 18px;
+    border:2px solid var(--ink);border-radius:13px;background:var(--mustard);color:var(--ink);cursor:pointer;
+    box-shadow:3px 3px 0 rgba(58,53,44,.14);white-space:nowrap;}
+  .sharebtn:active{transform:translate(1px,1px);box-shadow:2px 2px 0 rgba(58,53,44,.14);}
+
   /* mobile */
   @media (max-width:760px){
     header{gap:10px 12px;padding:10px 14px 6px;}
@@ -147,6 +160,8 @@
     #timebar{padding:9px 12px;gap:7px;} .tbtn{font-size:12px;padding:8px 10px;}
     .tbtime{font-size:15px;min-width:46px;}
     .credit{display:none;}
+    #phase{top:10px;} .phasecard{padding:6px 14px;} .phasecard .pmain{font-size:16px;} .phasecard .psub{font-size:10px;}
+    .sharebtn{padding:8px 13px;font-size:12px;}
   }
   @media (max-width:420px){
     .tbtn .lbl-long{display:none;}
@@ -159,7 +174,7 @@
   <header>
     <div class="brand">
       <div class="dot-row"><span class="knob"></span><h1>Rail&nbsp;Radar</h1></div>
-      <small>山手線 — Yamanote Line</small>
+      <small>東京の鼓動を、ひとつの円で。</small>
     </div>
     <div class="clock">
       <div class="time" id="clock">--:--:--</div>
@@ -170,13 +185,14 @@
       <div class="stat"><b id="cnt-total">0</b><span>列車</span></div>
       <div class="stat"><b id="cnt-stop">0</b><span>停車中</span></div>
     </div>
+    <button id="shareBtn" class="sharebtn">📤 シェア</button>
   </header>
 
   <div class="livebar">
     <span class="pill demo" id="mode-pill">DEMO</span>
     <input id="key" class="dev" type="text" placeholder="ODPT consumerKey を貼り付け" autocomplete="off" spellcheck="false">
     <button id="connect" class="dev">LIVE接続</button>
-    <button id="demo" class="ghost">デモ</button>
+    <button id="demo" class="ghost dev">デモ</button>
     <a class="getkey dev" href="https://developer.odpt.org/" target="_blank" rel="noopener">無料キーを取得 ↗</a>
     <span class="info" id="info">キー未設定 — デモ運行中。リアルタイム表示には無料のODPTキーが必要です。</span>
   </div>
@@ -184,6 +200,7 @@
   <div id="map-wrap">
     <svg id="map" preserveAspectRatio="xMidYMid meet"></svg>
     <div id="nightveil"></div>
+    <div id="phase"><div class="phasecard"><div class="pmain" id="phase-main">—</div><div class="psub" id="phase-sub"></div></div></div>
     <div id="stcard"></div>
     <div class="legend">
       <h3>運行系統</h3>
@@ -354,6 +371,7 @@ const cntTotal=document.getElementById('cnt-total'), cntStop=document.getElement
 const legOut=document.getElementById('leg-out'), legIn=document.getElementById('leg-in');
 const infoEl=document.getElementById('info'), pill=document.getElementById('mode-pill');
 const timebar=document.getElementById('timebar'), nightveil=document.getElementById('nightveil');
+const phaseMain=document.getElementById('phase-main'), phaseSub=document.getElementById('phase-sub');
 const scrub=document.getElementById('scrub'), scrubTime=document.getElementById('scrubTime'), stcard=document.getElementById('stcard');
 const nowBtn=document.getElementById('nowBtn'), playBtn=document.getElementById('playBtn');
 
@@ -372,6 +390,22 @@ const fmtHMS=s=>{s=((Math.floor(s))%86400+86400)%86400;return pad(s/3600)+':'+pa
 const fmtHM=s=>{s=((Math.floor(s))%86400+86400)%86400;return pad(s/3600)+':'+pad((s/60)%60);};
 // 夜の濃さ（タイムラプスの雰囲気）: 昼0 → 深夜0.55
 function nightFactor(t){const h=((t/3600)%24+24)%24;if(h>=6&&h<=18)return 0;const d=Math.min(h<6?6-h:h-18,6);return 0.55*(d/6);}
+// 時間帯フェーズ（録画動画が自己説明的になる）: sec=0..86400, count=走行本数
+function phaseInfo(sec,count){
+ if(!inService(sec))return{main:'💤 運行時間外',sub:'始発 4:26 ／ 終電 1:20'};
+ const h=sec<4800?sec/3600+24:sec/3600;
+ let m;
+ if(h>=24)m='🌃 終電へ';
+ else if(h<6)m='🌅 始発';
+ else if(h<7.5)m='🌇 朝';
+ else if(h<9.5)m=isHoliday?'🌇 朝':'🚇 朝ラッシュ';
+ else if(h<16)m='☀️ 日中';
+ else if(h<17)m='🌤 昼下がり';
+ else if(h<20)m=isHoliday?'🌆 夕方':'🌆 夕ラッシュ';
+ else if(h<23)m='🌙 夜';
+ else m='🌃 深夜';
+ return{main:m,sub:`いま ${count}本 走行中`};
+}
 // 次の電車までの秒数（実ダイヤの出発スケジュールから算出）
 function travelOsakiTo(dirKey,station){
  const loop=dirKey==='outer'?LOOPS.outer:LOOPS.inner;
@@ -566,7 +600,10 @@ function frame(now){
    for(const t of activeTrains){t.update(now);if(t._stopped)stop++;if(t.dir==='outer')out++;else inn++;}
    cntTotal.textContent=activeTrains.length;cntStop.textContent=stop;legOut.textContent=out;legIn.textContent=inn;
  }
- updateCard(mode==='demo'?shownT:jstSecOfDay());
+ const psec=mode==='demo'?shownT:jstSecOfDay();
+ const ph=phaseInfo(psec, outOfService?0:activeTrains.length);
+ phaseMain.textContent=ph.main; phaseSub.textContent=ph.sub;
+ updateCard(psec);
  requestAnimationFrame(frame);
 }
 
@@ -593,6 +630,15 @@ const revealDev=()=>livebar.classList.add('dev-on');
 document.getElementById('connect').addEventListener('click',()=>startLive({key:document.getElementById('key').value}));
 document.getElementById('key').addEventListener('keydown',e=>{if(e.key==='Enter')startLive({key:e.target.value});});
 document.getElementById('demo').addEventListener('click',()=>{if(pollTimer)clearInterval(pollTimer);buildDemo();});
+
+// ---- 共有（拡散の摩擦をゼロに） ----
+async function share(){
+ const url='https://rail-radar.takashiokashi.workers.dev/';
+ const text='今この瞬間の山手線。東京の鼓動が、ひとつの円で見える🚃';
+ if(navigator.share){try{await navigator.share({title:'Rail Radar',text,url});return;}catch(e){if(e&&e.name==='AbortError')return;}}
+ window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}&hashtags=${encodeURIComponent('RailRadar,山手線')}`,'_blank','noopener');
+}
+document.getElementById('shareBtn').addEventListener('click',share);
 
 // 起動
 buildDemo();
