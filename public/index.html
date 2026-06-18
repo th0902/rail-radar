@@ -145,6 +145,7 @@
     border:2px solid var(--ink);border-radius:13px;background:var(--mustard);color:var(--ink);cursor:pointer;
     box-shadow:3px 3px 0 rgba(58,53,44,.14);white-space:nowrap;}
   .sharebtn:active{transform:translate(1px,1px);box-shadow:2px 2px 0 rgba(58,53,44,.14);}
+  .navlink{font-size:12px;font-weight:700;color:var(--avocado-dk);text-decoration:none;border-bottom:1.5px dotted var(--avocado-dk);white-space:nowrap;}
 
   /* mobile */
   @media (max-width:760px){
@@ -178,6 +179,7 @@
       <small>東京の鼓動を、ひとつの円で。</small>
     </div>
     <div class="spacer"></div>
+    <a class="navlink" href="/toei.html">都営版 →</a>
     <button id="shareBtn" class="sharebtn">📤 シェア</button>
   </header>
 
@@ -492,6 +494,11 @@ async function startLive(opts){
  infoEl.classList.remove('warn');infoEl.textContent='接続中…';
  try{
    await poll();
+   if(mode==='live'&&liveMap.size===0){   // JR東はリアルタイム未提供（0件）→ 擬似ダイヤに留まる
+     buildDemo();
+     demoInfoText='JR東日本のリアルタイムは現在未提供のため、実ダイヤ連動の擬似運行を表示中です。';applyDemoInfo();
+     return false;
+   }
    pollTimer=setInterval(()=>poll().catch(e=>{infoEl.classList.add('warn');infoEl.textContent='更新エラー: '+e.message;}),20000);
    return true;
  }catch(e){

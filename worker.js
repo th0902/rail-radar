@@ -30,10 +30,15 @@ export default {
     const cached = await cache.match(cacheKey);
     if (cached) return cached;
 
+    // フィルタは whitelist（railway / operator）のみ転送。無指定は山手線（後方互換）。
+    const rw = url.searchParams.get('railway');
+    const op = url.searchParams.get('operator');
+    const filter = rw ? `odpt:railway=${encodeURIComponent(rw)}`
+                 : op ? `odpt:operator=${encodeURIComponent(op)}`
+                 : `odpt:railway=${encodeURIComponent(RAILWAY)}`;
     const upstream =
       `https://api.odpt.org/api/v4/${endpoint}` +
-      `?odpt:railway=${encodeURIComponent(RAILWAY)}` +
-      `&acl:consumerKey=${encodeURIComponent(env.ODPT_KEY)}`;
+      `?${filter}&acl:consumerKey=${encodeURIComponent(env.ODPT_KEY)}`;
 
     let r;
     try {

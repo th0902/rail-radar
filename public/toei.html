@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Rail Radar — 都営交通 リアルタイム</title>
+<meta name="description" content="都営地下鉄・都電・日暮里舎人ライナーの今この瞬間を、ミッドセンチュリーな路線図でリアルタイム表示。">
+<meta name="theme-color" content="#ECE3CF">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Rail Radar — 都営交通 リアルタイム">
+<meta property="og:description" content="都営全線の電車が、今この瞬間に走っている様子をリアルタイムで。">
+<meta property="og:image" content="https://rail-radar.takashiokashi.workers.dev/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<style>
+  :root{
+    --sand:#ECE3CF; --sand-deep:#E3D8BE;
+    --ink:#3A352C; --paper:#F8F3E6; --avocado-dk:#6E8443; --mustard:#E0A52E;
+    --map-fg:#3A352C;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;height:100%;}
+  body{background:radial-gradient(120% 120% at 50% 0%, #F2EAD8 0%, var(--sand) 55%, var(--sand-deep) 100%);
+    color:var(--ink);font-family:"Futura","Century Gothic","Avenir Next","Helvetica Neue","Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;
+    -webkit-font-smoothing:antialiased;overflow:hidden;}
+  #app{position:fixed;inset:0;display:flex;flex-direction:column;}
+  header{display:flex;align-items:center;gap:18px;padding:13px 24px 10px;flex-wrap:wrap;}
+  .brand{display:flex;flex-direction:column;line-height:1;}
+  .brand .dot-row{display:flex;align-items:center;gap:9px;}
+  .brand .knob{width:13px;height:13px;border-radius:50%;background:var(--mustard);border:2.5px solid var(--ink);}
+  .brand h1{font-size:23px;letter-spacing:.16em;margin:0;font-weight:700;text-transform:uppercase;}
+  .brand small{margin-top:6px;letter-spacing:.18em;font-size:11px;color:var(--avocado-dk);font-weight:700;}
+  .clock{margin-left:6px;display:flex;flex-direction:column;}
+  .clock .time{font-size:27px;font-weight:700;font-variant-numeric:tabular-nums;}
+  .clock .label{font-size:10px;letter-spacing:.18em;color:var(--avocado-dk);font-weight:700;margin-top:2px;}
+  .spacer{flex:1;}
+  .pill{font-size:11px;font-weight:800;letter-spacing:.18em;padding:6px 12px;border-radius:20px;border:2px solid var(--ink);text-transform:uppercase;}
+  .pill.live{background:#C8552E;color:var(--paper);} .pill.live::before{content:"●";margin-right:6px;animation:blink 1.2s infinite;}
+  .pill.wait{background:var(--mustard);color:var(--ink);}
+  @keyframes blink{50%{opacity:.25;}}
+  .sharebtn{font-family:inherit;font-weight:800;font-size:13px;padding:10px 16px;border:2px solid var(--ink);border-radius:13px;
+    background:var(--mustard);color:var(--ink);cursor:pointer;box-shadow:3px 3px 0 rgba(58,53,44,.14);}
+  .navlink{font-size:12px;font-weight:700;color:var(--avocado-dk);text-decoration:none;border-bottom:1.5px dotted var(--avocado-dk);}
+
+  #map-wrap{flex:1;position:relative;min-height:0;}
+  svg{width:100%;height:100%;display:block;}
+  .ln{fill:none;stroke-width:5.5;stroke-linejoin:round;stroke-linecap:round;opacity:.92;}
+  .stdot{stroke-width:1.6;}
+  .train rect{stroke:rgba(58,53,44,.85);stroke-width:1.3;}
+  .st-label{font-size:9px;font-weight:700;fill:var(--map-fg);pointer-events:none;opacity:.7;}
+
+  .legend{position:absolute;left:20px;bottom:18px;background:var(--paper);border:2px solid var(--ink);border-radius:15px;
+    padding:12px 15px;box-shadow:4px 4px 0 rgba(58,53,44,.15);display:flex;flex-direction:column;gap:7px;min-width:180px;}
+  .legend h3{margin:0 0 3px;font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:var(--avocado-dk);font-weight:700;}
+  .legend .row{display:flex;align-items:center;gap:9px;font-size:13px;font-weight:700;}
+  .legend .sw{width:18px;height:6px;border-radius:3px;flex:none;}
+  .legend .row small{margin-left:auto;color:var(--avocado-dk);font-variant-numeric:tabular-nums;font-size:12px;}
+
+  #status{position:absolute;top:14px;left:50%;transform:translateX(-50%);z-index:10;background:var(--paper);
+    border:2px solid var(--ink);border-radius:14px;padding:7px 16px;box-shadow:3px 3px 0 rgba(58,53,44,.14);
+    font-size:13px;font-weight:700;text-align:center;}
+  #status b{font-variant-numeric:tabular-nums;}
+  #status.warn{color:#C8552E;}
+
+  #tip{position:fixed;pointer-events:none;z-index:30;opacity:0;transform:translate(-50%,-118%);transition:opacity .12s;
+    background:var(--ink);color:var(--paper);padding:8px 12px;border-radius:10px;font-size:12px;line-height:1.45;white-space:nowrap;
+    box-shadow:3px 3px 0 rgba(58,53,44,.25);}
+  .credit{position:absolute;right:20px;bottom:16px;font-size:10px;letter-spacing:.14em;color:var(--avocado-dk);font-weight:700;opacity:.7;pointer-events:none;}
+  .dev{display:none;} body.dev-on .dev{display:inline-block;}
+  .keybar{position:absolute;top:54px;left:50%;transform:translateX(-50%);z-index:11;}
+  .keybar input{font-family:inherit;font-size:12px;padding:8px 11px;border:2px solid var(--ink);border-radius:10px;background:var(--paper);width:260px;}
+  @media(max-width:760px){
+    .brand h1{font-size:18px;} .clock .time{font-size:20px;}
+    .legend{left:10px;bottom:10px;padding:9px 11px;min-width:0;gap:5px;} .legend .row{font-size:11px;}
+    #status{font-size:11px;padding:6px 12px;} .credit{display:none;}
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="brand">
+      <div class="dot-row"><span class="knob"></span><h1>Rail&nbsp;Radar</h1></div>
+      <small>都営交通 全線・リアルタイム</small>
+    </div>
+    <div class="clock"><div class="time" id="clock">--:--:--</div><div class="label">JST · LIVE</div></div>
+    <div class="spacer"></div>
+    <span class="pill wait" id="pill">接続中</span>
+    <a class="navlink" href="/">山手線版 →</a>
+    <button class="sharebtn" id="shareBtn">📤 シェア</button>
+  </header>
+  <div id="map-wrap">
+    <svg id="map" preserveAspectRatio="xMidYMid meet"></svg>
+    <div id="status">読み込み中…</div>
+    <div class="keybar dev"><input id="key" placeholder="ODPT consumerKey（ローカル確認用）" autocomplete="off"></div>
+    <div class="legend" id="legend"><h3>都営 路線</h3></div>
+    <div class="credit">a mid-century transit tracker · ODPT</div>
+  </div>
+</div>
+<div id="tip"></div>
+<script src="toei-data.js"></script>
+<script>
+const NS="http://www.w3.org/2000/svg";
+const el=(t,a)=>{const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);return e;};
+const short=s=>s?String(s).split('Station:').pop():null;
+
+// ---- データ整形 ----
+const lineById={}; TOEI_LINES.forEach(l=>lineById[l.id]=l);
+const idxInLine={}; TOEI_LINES.forEach(l=>{const m={};l.stations.forEach((s,i)=>m[s]=i);idxInLine[l.id]=m;});
+
+// ---- 投影（緯度経度→画面） ----
+const VB={w:1060,h:780,pad:64};
+const lat0=35.70*Math.PI/180;
+(function project(){
+ let mnx=1e9,mxx=-1e9,mny=1e9,mxy=-1e9;
+ for(const id in TOEI_STATIONS){const s=TOEI_STATIONS[id];s._x=s.lo*Math.cos(lat0);s._y=-s.la;
+   mnx=Math.min(mnx,s._x);mxx=Math.max(mxx,s._x);mny=Math.min(mny,s._y);mxy=Math.max(mxy,s._y);}
+ const sc=Math.min((VB.w-2*VB.pad)/(mxx-mnx),(VB.h-2*VB.pad)/(mxy-mny));
+ const ox=(VB.w-(mxx-mnx)*sc)/2, oy=(VB.h-(mxy-mny)*sc)/2;
+ for(const id in TOEI_STATIONS){const s=TOEI_STATIONS[id];s.x=(s._x-mnx)*sc+ox;s.y=(s._y-mny)*sc+oy;}
+})();
+
+// ---- 描画 ----
+const svg=document.getElementById('map');svg.setAttribute('viewBox',`0 0 ${VB.w} ${VB.h}`);
+// 路線（長い順に下へ）
+[...TOEI_LINES].sort((a,b)=>b.stations.length-a.stations.length).forEach(l=>{
+ let d='';l.stations.forEach((sid,i)=>{const s=TOEI_STATIONS[sid];if(!s)return;d+=(d?'L':'M')+s.x.toFixed(1)+' '+s.y.toFixed(1)+' ';});
+ svg.appendChild(el('path',{d,class:'ln',stroke:l.color}));
+});
+// 駅ドット
+TOEI_LINES.forEach(l=>l.stations.forEach(sid=>{const s=TOEI_STATIONS[sid];if(!s)return;
+ svg.appendChild(el('circle',{cx:s.x,cy:s.y,r:3,fill:'var(--paper)',stroke:l.color,class:'stdot'}));}));
+const trainLayer=el('g',{});svg.appendChild(trainLayer);
+
+// ---- 凡例 ----
+const legend=document.getElementById('legend');
+const legCount={};
+TOEI_LINES.forEach(l=>{
+ const row=el2('div','row');
+ row.innerHTML=`<span class="sw" style="background:${l.color}"></span>${l.name}<small id="c-${l.id.replace(/\./g,'_')}">0</small>`;
+ legend.appendChild(row);
+});
+function el2(t,c){const e=document.createElement(t);if(c)e.className=c;return e;}
+
+// ---- ライブ列車 ----
+const tip=document.getElementById('tip');
+const isLocal=location.protocol==='file:'||['localhost','127.0.0.1'].includes(location.hostname);
+const statusEl=document.getElementById('status'), pill=document.getElementById('pill');
+let trains=new Map();   // id -> train
+const SEGBASE=70;       // 駅間グライドの基準秒
+
+function trainEl(color){
+ const g=el('g',{class:'train'});
+ g.appendChild(el('rect',{x:-7.5,y:-4.5,width:15,height:9,rx:3,fill:color}));
+ g.appendChild(el('circle',{cx:0,cy:0,r:11,fill:'transparent'}));
+ trainLayer.appendChild(g);return g;
+}
+function apply(data){
+ const seen=new Set();
+ for(const d of data){
+   const lid=String(d['odpt:railway']||'').split(':').pop();
+   const line=lineById[lid]; if(!line)continue;
+   const fromId=short(d['odpt:fromStation']), toId=short(d['odpt:toStation']);
+   const fi=idxInLine[lid][fromId]; if(fi==null)continue;
+   const id=d['owl:sameAs']||d['@id']||(lid+(d['odpt:trainNumber']||fi));
+   seen.add(id);
+   let t=trains.get(id);
+   if(!t){t={line,el:trainEl(line.color)};trains.set(id,t);bindTip(t);}
+   const ti=(toId!=null)?idxInLine[lid][toId]:null;
+   const changed=(t.fromId!==fromId||t.toId!==toId);
+   t.fromId=fromId;t.toId=(ti!=null?toId:null);t.delay=d['odpt:delay']||0;t.num=d['odpt:trainNumber']||'';t.lid=lid;
+   if(changed||t.segStart==null){
+     t.segStart=performance.now();
+     const a=TOEI_STATIONS[fromId], b=(ti!=null)?TOEI_STATIONS[toId]:null;
+     t.a=a;t.b=b;t.segDur=b?Math.max(35,Math.hypot(b.x-a.x,b.y-a.y)*0.9):0;
+   }
+ }
+ for(const[id,t]of trains){if(!seen.has(id)){t.el.remove();trains.delete(id);}}
+}
+function bindTip(t){
+ t.el.addEventListener('mousemove',e=>{tip.style.opacity=1;tip.style.left=e.clientX+'px';tip.style.top=e.clientY+'px';
+   const nx=t.toId?TOEI_STATIONS[t.toId]:t.a;
+   tip.innerHTML=`<b>${t.line.name}</b><br>${t.toId?'次は '+(nx?nx.n:''):'停車中'}`+(t.delay>0?`<br>遅延 約${Math.round(t.delay/60)}分`:'');});
+ t.el.addEventListener('mouseleave',()=>tip.style.opacity=0);
+}
+function render(now){
+ const cnt={}; let total=0;
+ for(const[id,t]of trains){
+   const a=t.a; if(!a){continue;}
+   let x=a.x,y=a.y,deg=0;
+   if(t.b){const f=Math.min(0.92,(now-t.segStart)/1000/Math.max(t.segDur,1));
+     x=a.x+(t.b.x-a.x)*f;y=a.y+(t.b.y-a.y)*f;deg=Math.atan2(t.b.y-a.y,t.b.x-a.x)*180/Math.PI;}
+   t.el.setAttribute('transform',`translate(${x.toFixed(2)} ${y.toFixed(2)}) rotate(${deg.toFixed(1)})`);
+   cnt[t.lid]=(cnt[t.lid]||0)+1; total++;
+ }
+ TOEI_LINES.forEach(l=>{const e=document.getElementById('c-'+l.id.replace(/\./g,'_'));if(e)e.textContent=cnt[l.id]||0;});
+ document.getElementById('clock').textContent=new Date().toLocaleTimeString('ja-JP',{timeZone:'Asia/Tokyo'});
+ if(!statusEl.classList.contains('warn'))statusEl.innerHTML=`都営交通 · いま <b>${total}</b>本が走行中`;
+ window._total=total;
+ requestAnimationFrame(render);
+}
+requestAnimationFrame(render);
+
+async function poll(){
+ try{
+   let url;
+   if(isLocal){const k=(localStorage.getItem('odpt_key')||'').trim();
+     if(!k){statusEl.classList.add('warn');statusEl.textContent='ローカル：下の枠にODPTキーを入力';document.body.classList.add('dev-on');return;}
+     url=`https://api.odpt.org/api/v4/odpt:Train?odpt:operator=odpt.Operator:Toei&acl:consumerKey=${encodeURIComponent(k)}`;
+   }else url='/api/trains?operator=odpt.Operator:Toei';
+   const r=await fetch(url,{cache:'no-store'});
+   if(r.status===500){statusEl.classList.add('warn');statusEl.textContent='準備中：APIキー設定後にライブ表示されます';pill.textContent='準備中';return;}
+   if(!r.ok)throw new Error('HTTP '+r.status);
+   const data=await r.json();
+   apply(data);
+   statusEl.classList.remove('warn');pill.className='pill live';pill.textContent='LIVE';
+   if(data.length===0){statusEl.innerHTML='現在、運行中の列車データがありません（夜間など）';}
+ }catch(e){statusEl.classList.add('warn');statusEl.textContent='取得エラー: '+e.message;}
+}
+poll(); setInterval(poll,20000);
+
+// ---- 共有 ----
+document.getElementById('shareBtn').addEventListener('click',async()=>{
+ const url='https://rail-radar.takashiokashi.workers.dev/toei.html';
+ const text=`都営交通のいま。${window._total||''}本の電車が今この瞬間に走ってる🚇（リアルタイム）`;
+ if(navigator.share){try{await navigator.share({title:'Rail Radar',text,url});return;}catch(e){if(e&&e.name==='AbortError')return;}}
+ window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}&hashtags=${encodeURIComponent('RailRadar,都営交通')}`,'_blank','noopener');
+});
+// ローカル確認：キー入力
+const keyInput=document.getElementById('key');
+if(isLocal){const sv=localStorage.getItem('odpt_key');if(sv)keyInput.value=sv;}
+keyInput&&keyInput.addEventListener('change',e=>{localStorage.setItem('odpt_key',e.target.value.trim());statusEl.classList.remove('warn');poll();});
+</script>
+</body>
+</html>
